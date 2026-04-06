@@ -116,3 +116,5 @@ dmypy.json
 cython_debug/
 .idea/
 Pikafish/
+Pikafish.zip
+dsocr/
