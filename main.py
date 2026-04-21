@@ -239,27 +239,22 @@ class InteractiveShell:
         print("\n=== 摄像头测试 ===\n")
         
         try:
-            from board_recognition import BoardRecognizer
+            from vision import BoardRecognizer
+            import cv2
             
             with BoardRecognizer() as recognizer:
                 print("摄像头已启动")
                 print("按任意键捕获图像，ESC 退出")
                 
                 while True:
-                    frame = recognizer.capture_frame()
+                    frame = recognizer.camera_manager.capture_frame()
                     
                     if frame is not None:
-                        cv2 = __import__('cv2')
                         cv2.imshow('Camera Test', frame)
                         
                         key = cv2.waitKey(1) & 0xFF
                         if key == 27:  # ESC
                             break
-                        
-                        # 检测棋盘
-                        corners = recognizer.detect_board_grid(frame)
-                        if corners is not None:
-                            print(f"检测到棋盘角点：{corners}")
                 
                 print("\n测试完成")
         
@@ -273,7 +268,7 @@ class InteractiveShell:
         print("\n=== AI 引擎测试 ===\n")
         
         try:
-            from ai_engine import AIEngine
+            from ai import AIEngine
             
             with AIEngine() as engine:
                 if not engine.is_ready:
@@ -301,7 +296,7 @@ class InteractiveShell:
         print("\n=== 机械臂测试 ===\n")
         
         try:
-            from robot_control import RobotController
+            from robot import RobotController
             
             with RobotController() as controller:
                 if not controller.is_initialized:
@@ -407,19 +402,19 @@ def main():
                     manager.calibrate()
         
         elif args.test_camera:
-            from board_recognition import BoardRecognizer
+            from vision import BoardRecognizer
+            import cv2
             with BoardRecognizer() as recognizer:
                 print("摄像头测试中... 按 ESC 退出")
                 while True:
-                    frame = recognizer.capture_frame()
+                    frame = recognizer.camera_manager.capture_frame()
                     if frame is not None:
-                        import cv2
                         cv2.imshow('Camera Test', frame)
                         if cv2.waitKey(1) & 0xFF == 27:
                             break
         
         elif args.test_engine:
-            from ai_engine import AIEngine
+            from ai import AIEngine
             with AIEngine() as engine:
                 if engine.is_ready:
                     print("AI 引擎测试:")
@@ -427,7 +422,7 @@ def main():
                     print(f"AI 走法：{move}" if move else "AI 未能找到走法")
         
         elif args.test_robot:
-            from robot_control import RobotController
+            from robot import RobotController
             with RobotController() as controller:
                 if controller.is_initialized:
                     print("机械臂测试:")

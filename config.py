@@ -14,6 +14,17 @@ BOARD_COLS = 9                # 棋盘列数
 SQUARE_SIZE_MM = 50           # 每个格子的实际尺寸（毫米）
 BOARD_MARGIN_MM = 20          # 棋盘边缘留白（毫米）
 
+# YOLO 模型配置
+YOLO_MODEL_PATH = "./best.pt"       # YOLOv8 棋子检测模型路径
+YOLO_CONF_THRES = 0.10        # YOLO 置信度阈值
+MIN_PIECE_SIZE = 70           # 最小棋子像素尺寸（过滤误识）
+SNAP_DIST_THRES = 0.45        # 检测框中心吸附到交点的最大容许距离
+
+# 稳定化参数
+STABLE_WINDOW = 5             # 最近若干帧做稳定化
+STABLE_RATIO = 0.60           # 稳定化比例阈值
+AUTO_STABLE_FRAMES = 25       # 持续稳定帧数触发自动识别
+
 # 图像处理参数
 CANNY_THRESHOLD1 = 50         # Canny 边缘检测阈值 1
 CANNY_THRESHOLD2 = 150        # Canny 边缘检测阈值 2

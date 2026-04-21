@@ -40,17 +40,17 @@ class GameManager:
             logger.info("开始初始化各组件...")
             
             # 1. 初始化棋盘识别器
-            from board_recognition import BoardRecognizer
+            from vision import BoardRecognizer
             self.board_recognizer = BoardRecognizer()
             logger.info("✓ 棋盘识别器已初始化")
             
             # 2. 初始化 AI 引擎
-            from ai_engine import AIEngine
+            from ai import AIEngine
             self.ai_engine = AIEngine()
             logger.info("✓ AI 引擎已初始化")
             
             # 3. 初始化机械臂控制器
-            from robot_control import RobotController
+            from robot import RobotController
             self.robot_controller = RobotController()
             logger.info("✓ 机械臂控制器已初始化")
             

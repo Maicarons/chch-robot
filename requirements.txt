@@ -3,6 +3,13 @@
 # 核心依赖
 opencv-python>=4.5.0
 numpy>=1.20.0
+onnxruntime-gpu>=1.15.0  # ONNX 模型推理 (GPU 版本)
+pandas>=1.3.0  # 用于数据处理
 
-# 可选依赖
+# Web仿真环境依赖
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# 可选依赖（旧方案，已废弃）
+# ultralytics>=8.0.0  # YOLOv8 目标检测（已被 ONNX 方案替代）
 # pyffish>=0.0.88  # 用于走法验证（可选）
