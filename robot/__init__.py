@@ -3,5 +3,6 @@
 """
 
 from .controller import RobotController
+from .tcp_client import RobotTCPClient, RobotCommandType, RobotResponseCode
 
-__all__ = ['RobotController']
+__all__ = ['RobotController', 'RobotTCPClient', 'RobotCommandType', 'RobotResponseCode']

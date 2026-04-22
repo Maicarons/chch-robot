@@ -13,7 +13,7 @@ from typing import Optional, Dict, Tuple, List
 from .camera import CameraManager
 from .detector import ChessboardDetector
 from .stabilizer import StableBoardBuffer
-from config import CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS, SNAP_DIST_THRES, STABLE_WINDOW, STABLE_RATIO
+from config import CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS, SNAP_DIST_THRES, STABLE_WINDOW, STABLE_RATIO, USE_NETWORK_CAMERA, NETWORK_CAMERA_URL
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,9 @@ class BoardRecognizer:
                  classifier_model_path: str = None,
                  width: int = None,
                  height: int = None,
-                 fps: int = None):
+                 fps: int = None,
+                 use_network: bool = None,
+                 network_url: str = None):
         """
         初始化识别器
         
@@ -48,6 +50,8 @@ class BoardRecognizer:
             width: 图像宽度
             height: 图像高度
             fps: 帧率
+            use_network: 是否使用网络摄像头
+            network_url: 网络摄像头WebSocket地址
         """
         # 获取项目根目录（vision/的父目录）
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -62,12 +66,16 @@ class BoardRecognizer:
         width = width or CAMERA_WIDTH
         height = height or CAMERA_HEIGHT
         fps = fps or CAMERA_FPS
+        use_network = use_network if use_network is not None else USE_NETWORK_CAMERA
+        network_url = network_url or NETWORK_CAMERA_URL
         
         self.camera_manager = CameraManager(
             camera_index=camera_index,
             width=width,
             height=height,
-            fps=fps
+            fps=fps,
+            use_network=use_network,
+            network_url=network_url
         )
         self.detector = ChessboardDetector(
             pose_model_path=pose_model_path,
@@ -79,7 +87,8 @@ class BoardRecognizer:
         self.last_board_state = None
         self.current_fen = None
         
-        logger.info(f"棋盘识别器初始化完成 (detect_interval={detect_interval}s)")
+        mode = "网络" if use_network else "本地"
+        logger.info(f"棋盘识别器初始化完成 (detect_interval={detect_interval}s, {mode}摄像头)")
     
     def start(self) -> bool:
         """启动摄像头"""

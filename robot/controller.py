@@ -1,5 +1,5 @@
 """
-机械臂控制模块 - 模拟和真实机械臂控制
+机械臂控制模块 - 模拟、真实硬件和TCP远程控制
 整合自原 robot_control.py
 """
 
@@ -12,16 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 class RobotController:
-    """机械臂控制器（支持仿真和真实硬件）"""
+    """机械臂控制器（支持仿真、真实硬件和TCP远程控制）"""
     
-    def __init__(self, robot_type: str = None):
+    def __init__(self, robot_type: str = None, use_tcp: bool = False,
+                 tcp_host: str = "192.168.1.200", tcp_port: int = 5000):
         """
         初始化机械臂控制器
         
         Args:
             robot_type: 机械臂类型："simulation", "dobot", "elephant_robotics"
+            use_tcp: 是否使用TCP远程控制（STM32）
+            tcp_host: TCP服务器IP地址
+            tcp_port: TCP端口
         """
         self.robot_type = robot_type or config.ROBOT_TYPE
+        self.use_tcp = use_tcp
+        self.tcp_host = tcp_host
+        self.tcp_port = tcp_port
+        
         self.is_initialized = False
         self.current_position = (config.HOME_POSITION_X, 
                                 config.HOME_POSITION_Y, 
@@ -31,7 +39,13 @@ class RobotController:
         # 真实机械臂对象（根据类型加载不同库）
         self.robot_device = None
         
-        logger.info(f"机械臂控制器初始化，类型：{self.robot_type}")
+        # TCP客户端
+        self.tcp_client = None
+        
+        if use_tcp:
+            logger.info(f"机械臂控制器初始化，类型：TCP远程 ({tcp_host}:{tcp_port})")
+        else:
+            logger.info(f"机械臂控制器初始化，类型：{self.robot_type}")
     
     def initialize(self) -> bool:
         """
@@ -41,7 +55,24 @@ class RobotController:
             是否成功初始化
         """
         try:
-            if self.robot_type == "simulation":
+            if self.use_tcp:
+                # TCP远程控制模式
+                from .tcp_client import RobotTCPClient
+                self.tcp_client = RobotTCPClient(
+                    host=self.tcp_host,
+                    port=self.tcp_port
+                )
+                
+                if self.tcp_client.connect():
+                    self.is_initialized = True
+                    logger.info("✓ TCP机械臂连接成功")
+                    return True
+                else:
+                    logger.error("✗ TCP机械臂连接失败")
+                    self.is_initialized = False
+                    return False
+            
+            elif self.robot_type == "simulation":
                 logger.info("使用仿真模式")
                 self.is_initialized = True
                 return True
@@ -69,7 +100,13 @@ class RobotController:
     def shutdown(self):
         """关闭机械臂"""
         try:
-            if self.robot_type == "simulation":
+            if self.use_tcp:
+                if self.tcp_client:
+                    self.tcp_client.disconnect()
+                    self.tcp_client = None
+                logger.info("TCP机械臂已断开")
+            
+            elif self.robot_type == "simulation":
                 logger.info("仿真机械臂已关闭")
             
             elif self.robot_device is not None:
@@ -253,7 +290,8 @@ class RobotController:
     
     def move_piece(self, from_x: float, from_y: float, 
                   to_x: float, to_y: float,
-                  z: float = None) -> bool:
+                  z: float = None, piece_char: str = 'R',
+                  is_capture: bool = False) -> bool:
         """
         移动棋子从一个位置到另一个位置
         
@@ -263,31 +301,49 @@ class RobotController:
             to_x: 目标 X 坐标
             to_y: 目标 Y 坐标
             z: Z 坐标，None 则自动计算
+            piece_char: 棋子字符（用于TCP模式）
+            is_capture: 是否吃子（用于TCP模式）
             
         Returns:
             是否成功移动
         """
         logger.info(f"移动棋子：({from_x}, {from_y}) -> ({to_x}, {to_y})")
         
-        # 步骤 1: 移动到起始位置上方
-        safe_z = (z or config.GRIPPER_PICK_HEIGHT) + config.GRIPPER_MOVE_HEIGHT
-        if not self.move_to(from_x, from_y, safe_z):
-            return False
+        if self.use_tcp and self.tcp_client:
+            # TCP远程控制模式
+            z_height = z or config.GRIPPER_PICK_HEIGHT
+            success, message = self.tcp_client.move_piece(
+                piece_char=piece_char,
+                from_x=from_x,
+                from_y=from_y,
+                to_x=to_x,
+                to_y=to_y,
+                is_capture=is_capture,
+                z_height=z_height
+            )
+            return success
         
-        # 步骤 2: 抓取棋子
-        if not self.pick_piece(from_x, from_y, z):
-            return False
-        
-        # 步骤 3: 移动到目标位置上方
-        if not self.move_to(to_x, to_y, safe_z):
-            return False
-        
-        # 步骤 4: 放置棋子
-        if not self.place_piece(to_x, to_y, z):
-            return False
-        
-        logger.info("棋子移动完成")
-        return True
+        else:
+            # 本地模式（仿真或真实机械臂）
+            # 步骤 1: 移动到起始位置上方
+            safe_z = (z or config.GRIPPER_PICK_HEIGHT) + config.GRIPPER_MOVE_HEIGHT
+            if not self.move_to(from_x, from_y, safe_z):
+                return False
+            
+            # 步骤 2: 抓取棋子
+            if not self.pick_piece(from_x, from_y, z):
+                return False
+            
+            # 步骤 3: 移动到目标位置上方
+            if not self.move_to(to_x, to_y, safe_z):
+                return False
+            
+            # 步骤 4: 放置棋子
+            if not self.place_piece(to_x, to_y, z):
+                return False
+            
+            logger.info("棋子移动完成")
+            return True
     
     def go_home(self) -> bool:
         """

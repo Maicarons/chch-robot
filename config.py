@@ -8,6 +8,10 @@ CAMERA_WIDTH = 1280           # 摄像头宽度
 CAMERA_HEIGHT = 720           # 摄像头高度
 CAMERA_FPS = 30               # 帧率
 
+# 网络摄像头配置（香橙派）
+USE_NETWORK_CAMERA = False    # 是否使用网络摄像头
+NETWORK_CAMERA_URL = "ws://192.168.1.100:8765"  # 香橙派WebSocket地址
+
 # ============= 棋盘识别配置 =============
 BOARD_ROWS = 10               # 棋盘行数
 BOARD_COLS = 9                # 棋盘列数
@@ -87,9 +91,9 @@ BOARD_TOP_LEFT_Z = 0
 # 棋盘旋转角度（度）
 BOARD_ROTATION_ANGLE = 0
 
-# ============= 网络配置（如果使用网络摄像头） =============
-USE_IP_CAMERA = False
-IP_CAMERA_URL = "http://192.168.1.100:8080/video"
-
 # ============= 备用配置 =============
 FEN_START_POSITION = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"
+
+# ============= 已废弃配置 =============
+# USE_IP_CAMERA = False  # 已废弃，改用 USE_NETWORK_CAMERA
+# IP_CAMERA_URL = "http://192.168.1.100:8080/video"  # 已废弃
