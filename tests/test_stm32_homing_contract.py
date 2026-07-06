@@ -1,8 +1,8 @@
-from pathlib import Path
+﻿from pathlib import Path
 import unittest
 
 
-STM32_ROOT = Path(r"C:\CodexWork\CH-RO\1\shiyan1")
+STM32_ROOT = Path(__file__).resolve().parents[1] / "firmware" / "stm32-f103-keil-robot"
 
 
 class Stm32HomingContractTests(unittest.TestCase):
@@ -13,7 +13,7 @@ class Stm32HomingContractTests(unittest.TestCase):
         self.transport = (STM32_ROOT / "esp8266" / "esp8266.c").read_text(
             encoding="utf-8", errors="replace"
         )
-        self.main = (STM32_ROOT / "text1.c").read_text(
+        self.main = (STM32_ROOT / "robot_main.c").read_text(
             encoding="utf-8", errors="replace"
         )
 

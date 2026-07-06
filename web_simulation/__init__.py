@@ -1,8 +1,3 @@
-"""
-Web仿真环境 - 全真模拟测试平台
+"""Web simulation package for the CH-RO robot control interface."""
 
-TODO: 实现Flask后端和前端页面
-"""
-
-# 占位符 - 待实现
-print("Web仿真环境模块已创建,待实现")
+__all__ = []

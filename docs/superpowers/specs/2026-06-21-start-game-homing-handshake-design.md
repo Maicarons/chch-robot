@@ -1,4 +1,4 @@
-# Start Game Homing Handshake Design
+﻿# Start Game Homing Handshake Design
 
 ## Goal
 
@@ -56,4 +56,4 @@ the game and visual move recognition.
 - Test the status probe response.
 - Run a local TCP fake STM32 to verify send/receive sequencing.
 - Compile-check all Python files and inspect the Keil source paths selected by
-  `text1.uvprojx`.
+  `stm32-f103-robot.uvprojx`.
