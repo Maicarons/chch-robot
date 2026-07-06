@@ -32,6 +32,7 @@ from robot import (
     RobotSendResult,
     uci_to_arm_command,
 )
+from web_simulation import domain as web_domain
 import config
 
 STANDARD_INITIAL_BOARD = {
@@ -344,10 +345,7 @@ def get_robot_controller():
 
 
 def normalize_robot_mode(value=None):
-    mode = (value or ROBOT_MODE_HARDWARE).strip().lower()
-    if mode not in ROBOT_MODES:
-        raise ValueError(f"invalid robot mode: {value!r}")
-    return mode
+    return web_domain.normalize_robot_mode(value)
 
 
 def current_robot_mode():
@@ -359,23 +357,19 @@ def current_robot_mode():
 
 
 def color_to_turn_char(color):
-    return 'w' if color == 'red' else 'b'
+    return web_domain.color_to_turn_char(color)
 
 
 def turn_char_to_color(turn_char):
-    return 'red' if turn_char == 'w' else 'black'
+    return web_domain.turn_char_to_color(turn_char)
 
 
 def opposite_color(color):
-    return 'black' if color == 'red' else 'red'
+    return web_domain.opposite_color(color)
 
 
 def apply_turn_to_fen(fen, turn_color):
-    fen_parts = fen.split()
-    if len(fen_parts) >= 2:
-        fen_parts[1] = color_to_turn_char(turn_color)
-        return ' '.join(fen_parts)
-    return f"{fen} {color_to_turn_char(turn_color)} - - 0 1"
+    return web_domain.apply_turn_to_fen(fen, turn_color)
 
 
 def current_turn_color():
@@ -433,13 +427,11 @@ def update_current_fen():
 
 
 def board_pos_to_uci(pos):
-    """Convert board array coordinates (col,row; row 0 at top) to xiangqi UCI square."""
-    col, row = pos
-    return f"{UCI_FILES[col]}{9 - row}"
+    return web_domain.board_pos_to_uci(pos)
 
 
 def points_to_uci(from_pos, to_pos):
-    return f"{board_pos_to_uci(from_pos)}{board_pos_to_uci(to_pos)}"
+    return web_domain.points_to_uci(from_pos, to_pos)
 
 
 def get_robot_board_config():
@@ -614,7 +606,7 @@ def close_robot_tcp_client():
 
 
 def uci_to_robot_command(uci_move, board_state=None):
-    """Convert UCI to the shiyan1 command [startX,startY,endX,endY,signal]."""
+    """Convert UCI to the STM32 five-value command [startX,startY,endX,endY,signal]."""
     try:
         return uci_to_arm_command(
             uci_move,
@@ -740,23 +732,7 @@ def robot_settle_seconds_for_command(command):
 
 
 def apply_uci_to_board_state(board_state, uci_move):
-    """Apply a UCI move to a string-key board state and return whether it captures."""
-    if not uci_move or len(uci_move) < 4:
-        return False
-
-    from_col = UCI_FILES.index(uci_move[0])
-    from_row = 9 - int(uci_move[1])
-    to_col = UCI_FILES.index(uci_move[2])
-    to_row = 9 - int(uci_move[3])
-    from_key = f"{from_col},{from_row}"
-    to_key = f"{to_col},{to_row}"
-
-    piece = board_state.get(from_key)
-    captured = to_key in board_state
-    if piece:
-        board_state.pop(from_key, None)
-        board_state[to_key] = piece
-    return captured
+    return web_domain.apply_uci_to_board_state(board_state, uci_move)
 
 
 def apply_ai_best_move(best_move):

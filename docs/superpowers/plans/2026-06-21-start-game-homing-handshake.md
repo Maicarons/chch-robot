@@ -1,4 +1,4 @@
-# Start Game Homing Handshake Implementation Plan
+﻿# Start Game Homing Handshake Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -49,9 +49,9 @@
 ### Task 4: STM32 Command Lifecycle
 
 **Files:**
-- Modify: `C:/CodexWork/CH-RO/1/shiyan1/esp8266/esp8266.h`
-- Modify: `C:/CodexWork/CH-RO/1/shiyan1/esp8266/esp8266.c`
-- Modify: `C:/CodexWork/CH-RO/1/shiyan1/text1.c`
+- Modify: `firmware/stm32-f103-keil-robot/esp8266/esp8266.h`
+- Modify: `firmware/stm32-f103-keil-robot/esp8266/esp8266.c`
+- Modify: `firmware/stm32-f103-keil-robot/robot_main.c`
 
 - [ ] Move the shared system-state enum to the ESP8266 header.
 - [ ] Harden five-value parsing and idle-state command acceptance.

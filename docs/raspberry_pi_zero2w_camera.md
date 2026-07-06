@@ -1,4 +1,4 @@
-# Raspberry Pi Zero 2 W USB Network Camera Guide
+﻿# Raspberry Pi Zero 2 W USB Network Camera Guide
 
 This guide is written for the CH-RO chess robot project:
 
@@ -28,22 +28,22 @@ and stable. A good single frame matters more than 30 fps.
 
 Useful for this task:
 
-- `官方烧录器安装镜像.pdf`: use Raspberry Pi Imager; set hostname, username,
+- Raspberry Pi Imager setup guide: use Raspberry Pi Imager; set hostname, username,
   password, Wi-Fi country `CN`, Wi-Fi SSID/password, and enable SSH while
   writing the image.
-- `使用Win32disk软件烧录镜像.pdf`: fallback only when you already have a local
+- Win32DiskImager guide: fallback only when you already have a local
   `.img` file. It does not help configure Wi-Fi and SSH as conveniently.
-- `树莓派远程SSH.pdf`: find the Pi IP from router/client list or IP scanner; use
+- Raspberry Pi remote SSH guide: find the Pi IP from router/client list or IP scanner; use
   MobaXterm, PuTTY, Xshell, or Windows SSH.
-- `树莓派和电脑远程传输文件.pdf`: transfer files by SFTP using IP, username,
+- Raspberry Pi file transfer guide: transfer files by SFTP using IP, username,
   password, and port `22`.
-- `使用USB摄像头.pdf`: verify USB camera detection with `lsusb` and
+- USB camera guide: verify USB camera detection with `lsusb` and
   `ls /dev/video*`; add the user to the `video` group if needed.
-- `树莓派5设置静态IP.pdf`: useful only after first successful SSH login. On new
+- Raspberry Pi static IP guide: useful only after first successful SSH login. On new
   Raspberry Pi OS, use `nmcli` / `nmtui` instead of editing old `dhcpcd.conf`.
-- `raspi-config工具.pdf`: useful for enabling interfaces later, but Raspberry Pi
+- raspi-config guide: useful for enabling interfaces later, but Raspberry Pi
   Imager should already enable SSH during burning.
-- `Linux常用命令.pdf`: useful as general terminal reference.
+- Linux command reference: useful as general terminal reference.
 
 Not useful for the current USB network-camera goal:
 
@@ -55,7 +55,7 @@ Not useful for the current USB network-camera goal:
 The project includes a Pi-side offline server pack:
 
 ```text
-raspberry_pi_zero2w_usb_camera_offline/
+camera_servers/raspberry-pi-zero2w-usb-camera/
 ```
 
 It contains:
@@ -85,7 +85,7 @@ do, but not every camera does.
    - Configure Wi-Fi SSID/password
    - Wi-Fi country: `CN`
    - Locale/timezone: `Asia/Shanghai`
-3. Copy `raspberry_pi_zero2w_usb_camera_offline` to the Pi after SSH works.
+3. Copy `camera_servers/raspberry-pi-zero2w-usb-camera` to the Pi after SSH works.
 4. Plug USB camera into the Pi.
 5. Start the server:
 

@@ -1,10 +1,10 @@
-# Robot Angle Plan Implementation Plan
+﻿# Robot Angle Plan Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Convert AI moves into five-value coordinates, SCARA angle action plans, and TCP commands for the STM32F103C8 robot controller, with NetAssist status shown in the web system log.
 
-**Architecture:** Keep coordinate conversion and network transport in `robot/protocol.py`, add SCARA kinematics and action-plan serialization there, and keep Flask as the workflow orchestrator. Add reference STM32F103C8 firmware files under `robot/stm32_f103c8_angle_plan/` for parsing/executing the new command without modifying the original vendor zip.
+**Architecture:** Keep coordinate conversion and network transport in `robot/protocol.py`, add SCARA kinematics and action-plan serialization there, and keep Flask as the workflow orchestrator. Add reference STM32F103C8 firmware files under `firmware/stm32-f103-angle-plan/` for parsing/executing the new command without modifying the original vendor zip.
 
 **Tech Stack:** Python standard library, Flask backend, vanilla JavaScript frontend, STM32F103C8 C reference firmware.
 
@@ -48,11 +48,11 @@
 ### Task 5: STM32F103C8 Reference Firmware
 
 **Files:**
-- Create: `robot/stm32_f103c8_angle_plan/README.md`
-- Create: `robot/stm32_f103c8_angle_plan/arm_plan_protocol.h`
-- Create: `robot/stm32_f103c8_angle_plan/arm_plan_protocol.c`
-- Create: `robot/stm32_f103c8_angle_plan/optimized_motion_control.h`
-- Create: `robot/stm32_f103c8_angle_plan/optimized_motion_control.c`
+- Create: `firmware/stm32-f103-angle-plan/README.md`
+- Create: `firmware/stm32-f103-angle-plan/arm_plan_protocol.h`
+- Create: `firmware/stm32-f103-angle-plan/arm_plan_protocol.c`
+- Create: `firmware/stm32-f103-angle-plan/optimized_motion_control.h`
+- Create: `firmware/stm32-f103-angle-plan/optimized_motion_control.c`
 
 - [ ] Provide bounded parser for `PLAN;<signal>;<step_count>;...`.
 - [ ] Provide action execution helpers for `PICK`, `DROP`, `DROP_CAPTURE`, and `HOME`.

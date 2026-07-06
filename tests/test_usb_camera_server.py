@@ -1,9 +1,14 @@
-import importlib.util
+﻿import importlib.util
 import pathlib
 import unittest
 
 
-MODULE_PATH = pathlib.Path(__file__).resolve().parents[1] / "raspberry_pi_zero2w_usb_camera_offline" / "usb_mjpeg_server.py"
+MODULE_PATH = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "camera_servers"
+    / "raspberry-pi-zero2w-usb-camera"
+    / "usb_mjpeg_server.py"
+)
 SPEC = importlib.util.spec_from_file_location("usb_mjpeg_server", MODULE_PATH)
 USB_CAMERA_SERVER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(USB_CAMERA_SERVER)

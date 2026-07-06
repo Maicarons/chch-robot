@@ -1,4 +1,4 @@
-# Robot Angle Plan Design
+﻿# Robot Angle Plan Design
 
 ## Goal
 
@@ -66,4 +66,4 @@ The STM32 side should parse the new `PLAN` command into a bounded action array, 
 STATE:5,RESULT:1
 ```
 
-on success. The reference firmware files live under `robot/stm32_f103c8_angle_plan/` so they can be merged into the Keil project without rewriting the original zip.
+on success. The reference firmware files live under `firmware/stm32-f103-angle-plan/` so they can be merged into the Keil project without rewriting the original zip.

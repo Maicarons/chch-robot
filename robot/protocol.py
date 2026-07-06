@@ -164,7 +164,7 @@ def uci_to_arm_command(
     board_state: Optional[Mapping[str, str]] = None,
     config: Optional[BoardToArmConfig] = None,
 ) -> RobotArmCommand:
-    """Convert a Xiangqi UCI move into the shiyan1 five-value arm command."""
+    """Convert a Xiangqi UCI move into the STM32 five-value arm command."""
 
     if not uci_move or len(uci_move) < 4:
         raise ValueError(f"invalid UCI move: {uci_move!r}")
