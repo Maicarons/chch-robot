@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chch-robot"
+version = "0.1.0"
+description = "Xiangqi (Chinese chess) robot system: vision, AI engine, robot-arm control, and a Flask web UI."
+requires-python = ">=3.8"
+# Runtime dependencies are tracked in requirements.txt. This file only pins the
+# formatting / lint / test tooling so conventions stay consistent across the repo.
+dependencies = []
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = [
+    "ai",
+    "cli",
+    "core",
+    "game_manager",
+    "robot",
+    "vision",
+    "web_simulation",
+    "xq_utils",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+src = ["."]
+
+[tool.ruff.lint]
+# E/pycodestyle, F/pyflakes, W/pycodestyle warnings, I/isort
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests legitimately reuse names and import for side effects.
+"tests/*" = ["F401", "F811"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning"]

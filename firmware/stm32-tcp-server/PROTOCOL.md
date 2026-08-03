@@ -202,7 +202,9 @@ JSON格式，以换行符结尾：
 ### Python示例
 
 ```python
-from robot import RobotTCPClient
+# 注意：RobotTCPClient 是基于 JSON 报文的遗留传输实现，仅供历史参考。
+# 当前主程序使用的激活传输层是 robot.protocol.RobotPersistentClient（五值指令协议）。
+from robot.legacy_tcp_client import RobotTCPClient
 
 # 创建客户端
 client = RobotTCPClient(host="192.168.1.200", port=5000)
@@ -326,7 +328,7 @@ Response: {"code":0,"message":"Move completed"}
 ### 3. Python测试工具
 
 ```bash
-python robot/tcp_client.py --host 192.168.1.200 --port 5000
+python robot/legacy_tcp_client.py --host 192.168.1.200 --port 5000
 ```
 
 ## 常见问题

@@ -15,16 +15,20 @@ main.py (CLI)  ──►  game_manager.py (orchestrates game flow)
     ▼                     ▼                     ▼
 vision/                ai/                   robot/
 ├── camera.py          └── engine.py         ├── controller.py
-├── detector.py        (Pikafish UCI)        ├── protocol.py
-├── mapper.py                                 ├── tcp_client.py
+├── detector.py        (Pikafish UCI)        ├── protocol.py (active: RobotPersistentClient)
+├── mapper.py                                 └── legacy_tcp_client.py (legacy JSON transport, not exported)
 ├── stabilizer.py                             └── (STM32 firmware)
 ├── network_camera.py
 └── recognizer.py
 
-core/                  web_simulation/
-├── chessboard_detector.py   └── app.py (Flask, port 5000)
-├── helper_4_kpt.py
-└── runonnx/
+core/                  web_simulation/ (Flask, port 5000)
+├── chessboard_detector.py   ├── app.py        (composition root / shared state)
+├── keypoint_helper.py       ├── domain.py     (pure board/turn helpers)
+└── runonnx/                 ├── services.py   (camera + robot client factories)
+                               ├── robot_cmd.py  (five-value command layer)
+                               ├── game_logic.py (stateful game transitions)
+                               ├── startup.py    (CLI startup overrides)
+                               └── routes/       (Blueprints: status, camera, recognition, game)
 ```
 
 Data flow: Camera → RTMPose ONNX → Piece Classifier ONNX → Stabilization → FEN → Pikafish → UCI move → Robot arm coordinates → TCP to STM32
@@ -77,10 +81,13 @@ Pikafish binary not in git — download from [Pikafish releases](https://github.
 - `_is_legal_xiangqi_move()` validates moves against Xiangqi rules
 - Network cameras: HTTP MJPEG via `HttpSnapshotCapture`, RTSP via OpenCV
 
-### Web App (web_simulation/app.py)
+### Web App (web_simulation/)
+- `app.py` is the **composition root**: it owns the shared `game_state` dict and the module-level globals (recognizer, robot clients, camera selection) and registers the route Blueprints onto the Flask app.
+- Pure helpers live in `domain.py` (board/FEN/turn math). `services.py` provides the camera and robot-TCP client factories. `robot_cmd.py` wraps the five-value command protocol. `game_logic.py` owns the stateful transitions (AI move application, dynamic baseline sync). `startup.py` handles CLI parameter overrides.
+- Routes are split by responsibility into Blueprints: `routes/status.py` (status/probe), `routes/camera.py` (camera/MJPEG), `routes/recognition.py` (recognition/AI move/dynamic tracking), `routes/game.py` (start/reset).
 - Flask + CORS, threaded mode
 - Two robot modes: `hardware` (real STM32) and `simulation`
-- Dynamic recognition endpoint `/api/recognize/dynamic` returns events: `move`, `unchanged`, `initial_locked`, `paused`
+- Dynamic recognition endpoint `/api/recognize/dynamic` returns events: `move`, `unchanged`, `initial_locked`, `paused`, `robot_board_confirmed`, `robot_board_waiting`, `robot_settling`
 - Vision pauses during robot moves; physical baseline confirmation required in hardware mode
 - `ai_command_token` prevents duplicate AI moves
 - Startup prompt allows overriding grid spacing and robot IP (skip with `CHRO_SKIP_STARTUP_PROMPT=1`)

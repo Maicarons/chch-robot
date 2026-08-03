@@ -13,7 +13,17 @@ import numpy as np
 from .camera import CameraManager
 from .detector import ChessboardDetector
 from .stabilizer import DynamicBoardTracker, StableBoardBuffer
-from config import CAMERA_FPS, CAMERA_HEIGHT, CAMERA_WIDTH, STABLE_RATIO, STABLE_WINDOW
+from xq_utils import FENUtils
+from config import (
+    BOARD_TOP_LEFT_X,
+    BOARD_TOP_LEFT_Y,
+    BOARD_TOP_LEFT_Z,
+    CAMERA_FPS,
+    CAMERA_HEIGHT,
+    CAMERA_WIDTH,
+    STABLE_RATIO,
+    STABLE_WINDOW,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +69,13 @@ class BoardRecognizer:
         self.detect_interval = detect_interval
         self.last_board_state = None
         self.current_fen = None
+        # 棋盘原点在机械臂坐标系中的位置（毫米），供机械臂执行走法时使用。
+        # 由 config.BOARD_TOP_LEFT_* 提供，作为未校准时的默认基准。
+        self.board_origin = (
+            BOARD_TOP_LEFT_X,
+            BOARD_TOP_LEFT_Y,
+            BOARD_TOP_LEFT_Z,
+        )
 
         logger.info("BoardRecognizer ready (camera=%s, interval=%ss)", self.camera_manager.source_label, detect_interval)
 
@@ -165,9 +182,7 @@ class BoardRecognizer:
             return None
 
     def get_fen_from_recognition(self, image: np.ndarray = None) -> Optional[str]:
-        return self.get_fen(image)
-
-    def get_fen(self, image: np.ndarray = None) -> Optional[str]:
+        """识别当前棋盘并返回 FEN 串。"""
         try:
             stable_state = self.recognize_board(image)
             if stable_state is None:
@@ -177,8 +192,6 @@ class BoardRecognizer:
             for (col, row), piece in stable_state.items():
                 if 0 <= col < 9 and 0 <= row < 10:
                     board_2d[row][col] = piece
-
-            from utils import FENUtils
 
             fen = FENUtils.to_fen(board_2d, side_to_move="w")
             self.current_fen = fen

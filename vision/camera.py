@@ -1,5 +1,10 @@
 """
 Camera manager for low-latency USB capture.
+
+Re-exports the source helpers (:mod:`vision.camera_source`) and the HTTP
+snapshot capturer (:mod:`vision.http_capture`) so that existing imports such as
+``from vision.camera import CameraManager, HttpSnapshotCapture,
+normalize_camera_source, build_http_camera_candidate_urls`` keep working.
 """
 
 import cv2
@@ -7,202 +12,37 @@ import logging
 import os
 import threading
 import time
-from typing import Optional, Tuple, Union
-import urllib.error
-import urllib.request
-from urllib.parse import urlparse, urlunparse
+from typing import Optional, Tuple
 
 import numpy as np
+from urllib.parse import urlparse
+
+from .camera_source import (
+    CameraSource,
+    NETWORK_CAMERA_SCHEMES,
+    HTTP_CAMERA_SCHEMES,
+    HTTP_STREAM_PATHS,
+    normalize_camera_source,
+    is_network_camera_source,
+    build_http_camera_candidate_urls,
+)
+from .http_capture import HttpSnapshotCapture, JPEG_SOI, JPEG_EOI
+
+__all__ = [
+    "CameraSource",
+    "NETWORK_CAMERA_SCHEMES",
+    "HTTP_CAMERA_SCHEMES",
+    "HTTP_STREAM_PATHS",
+    "normalize_camera_source",
+    "is_network_camera_source",
+    "build_http_camera_candidate_urls",
+    "HttpSnapshotCapture",
+    "JPEG_SOI",
+    "JPEG_EOI",
+    "CameraManager",
+]
 
 logger = logging.getLogger(__name__)
-
-
-CameraSource = Union[int, str]
-JPEG_SOI = b"\xff\xd8"
-JPEG_EOI = b"\xff\xd9"
-NETWORK_CAMERA_SCHEMES = {"http", "https", "rtsp", "rtmp"}
-HTTP_CAMERA_SCHEMES = {"http", "https"}
-HTTP_STREAM_PATHS = {
-    "/stream",
-    "/stream.mjpg",
-    "/stream.mjpeg",
-    "/mjpeg",
-    "/video.mjpg",
-    "/video.mjpeg",
-}
-
-
-def normalize_camera_source(source: CameraSource) -> CameraSource:
-    """Return an OpenCV-ready local index or network camera URL."""
-    if isinstance(source, int):
-        return source
-
-    if source is None:
-        return 0
-
-    text = str(source).strip()
-    if not text:
-        raise ValueError("camera source cannot be empty")
-
-    if text.startswith("camera:"):
-        text = text.split(":", 1)[1].strip()
-
-    if text.isdigit():
-        return int(text)
-
-    parsed = urlparse(text)
-    if parsed.scheme.lower() in NETWORK_CAMERA_SCHEMES and parsed.netloc:
-        return text
-
-    raise ValueError(f"unsupported camera source: {source!r}")
-
-
-def is_network_camera_source(source: CameraSource) -> bool:
-    return isinstance(normalize_camera_source(source), str)
-
-
-def build_http_camera_candidate_urls(source: str) -> list[str]:
-    """Return HTTP URLs to try for fetching one frame."""
-    normalized = str(normalize_camera_source(source))
-    parsed = urlparse(normalized)
-    if parsed.scheme.lower() not in HTTP_CAMERA_SCHEMES:
-        return [normalized]
-
-    candidates = []
-
-    def add_candidate(path: str = None, *, keep_query: bool = False):
-        next_path = parsed.path if path is None else path
-        next_query = parsed.query if keep_query else ""
-        url = urlunparse(
-            parsed._replace(path=next_path, query=next_query, params="", fragment="")
-        )
-        if url not in candidates:
-            candidates.append(url)
-
-    path = parsed.path or "/"
-    path_lower = path.lower()
-
-    if path_lower in ("", "/"):
-        add_candidate("/snapshot.jpg")
-        add_candidate("/frame.jpg")
-        add_candidate("/stream.mjpg")
-        add_candidate(path, keep_query=True)
-        return candidates
-
-    directory = path.rsplit("/", 1)[0]
-    directory = f"{directory}/" if directory else "/"
-    filename = path.rsplit("/", 1)[-1].lower()
-
-    if path_lower in HTTP_STREAM_PATHS or filename in {"stream", "stream.mjpg", "stream.mjpeg", "mjpeg"}:
-        add_candidate(path, keep_query=True)
-        add_candidate(f"{directory}snapshot.jpg")
-        add_candidate(f"{directory}frame.jpg")
-        return candidates
-
-    if filename in {"snapshot.jpg", "frame.jpg"}:
-        add_candidate(path, keep_query=True)
-        return candidates
-
-    add_candidate(f"{directory}snapshot.jpg")
-    add_candidate(f"{directory}frame.jpg")
-    add_candidate(path, keep_query=True)
-    return candidates
-
-
-class HttpSnapshotCapture:
-    """Fetch JPEG frames from HTTP camera endpoints without OpenCV network IO."""
-
-    def __init__(self, source: str, timeout: float = 2.5):
-        self.source = str(normalize_camera_source(source))
-        self.timeout = float(timeout)
-        self._opened = True
-        self._candidate_urls = build_http_camera_candidate_urls(self.source)
-        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-
-    def isOpened(self) -> bool:
-        return self._opened
-
-    def set(self, _prop: int, _value: float) -> bool:
-        return False
-
-    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
-        if not self._opened:
-            return False, None
-
-        last_error = None
-        for url in self._candidate_urls:
-            try:
-                frame = self._read_frame_from_url(url)
-                if frame is not None:
-                    return True, frame
-            except Exception as exc:
-                last_error = exc
-
-        if last_error is not None:
-            logger.debug("HTTP camera read failed for %s: %s", self.source, last_error)
-        return False, None
-
-    def release(self):
-        self._opened = False
-
-    def _read_frame_from_url(self, url: str) -> np.ndarray:
-        request = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "CHROCamera/1.0",
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
-                "Connection": "close",
-            },
-        )
-        with self._opener.open(request, timeout=self.timeout) as response:
-            content_type = str(response.headers.get("Content-Type", "")).lower()
-            if "multipart/x-mixed-replace" in content_type:
-                data = self._read_first_mjpeg_frame(response)
-            else:
-                data = response.read()
-            frame = self._decode_frame_bytes(data)
-            if frame is None:
-                raise RuntimeError(f"{url} returned no decodable JPEG frame")
-            return frame
-
-    def _read_first_mjpeg_frame(self, response) -> bytes:
-        deadline = time.monotonic() + self.timeout
-        buffer = bytearray()
-
-        while time.monotonic() < deadline and len(buffer) < 2 * 1024 * 1024:
-            chunk = response.read(4096)
-            if not chunk:
-                break
-            buffer.extend(chunk)
-
-            start = buffer.find(JPEG_SOI)
-            if start < 0:
-                continue
-
-            end = buffer.find(JPEG_EOI, start + len(JPEG_SOI))
-            if end < 0:
-                if start > 0:
-                    del buffer[:start]
-                continue
-
-            return bytes(buffer[start : end + len(JPEG_EOI)])
-
-        raise RuntimeError("timed out waiting for first MJPEG frame")
-
-    def _decode_frame_bytes(self, data: bytes) -> Optional[np.ndarray]:
-        if not data:
-            return None
-
-        start = data.find(b"\xff\xd8")
-        end = data.rfind(b"\xff\xd9")
-        if start >= 0 and end > start:
-            data = data[start : end + 2]
-
-        encoded = np.frombuffer(data, dtype=np.uint8)
-        if encoded.size == 0:
-            return None
-        return cv2.imdecode(encoded, cv2.IMREAD_COLOR)
 
 
 class CameraManager:

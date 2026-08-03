@@ -8,7 +8,7 @@ from pandas import DataFrame
 
 from .runonnx.rtmpose import RTMPOSE_ONNX
 from .runonnx.full_classifier import FULL_CLASSIFIER_ONNX
-from core.helper_4_kpt import extract_chessboard
+from .keypoint_helper import extract_chessboard
 
 
 class ChessboardDetector:

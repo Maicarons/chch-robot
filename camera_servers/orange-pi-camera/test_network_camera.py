@@ -27,8 +27,8 @@ def test_network_camera():
     print("=" * 60)
     print("\n请确保:")
     print("1. 香橙派已启动摄像头服务器")
-    print("2. config.py中USE_NETWORK_CAMERA=True")
-    print("3. NETWORK_CAMERA_URL设置正确")
+    print("2. config.py中USE_IP_CAMERA=True")
+    print("3. IP_CAMERA_URL设置正确")
     print("\n按任意键开始测试，ESC退出\n")
     
     input("按Enter开始...")

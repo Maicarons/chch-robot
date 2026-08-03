@@ -7,17 +7,19 @@ const enGuide = [
   { text: 'Configuration', link: '/en/guide/configuration' },
   { text: 'Hardware', link: '/en/guide/hardware' },
   { text: 'Development', link: '/en/guide/development' },
+  { text: 'REST API', link: '/en/reference/api' },
   { text: 'Reference Index', link: '/en/reference/' }
 ]
 
 const zhGuide = [
-  { text: 'Overview', link: '/zh/' },
-  { text: 'Getting Started', link: '/zh/guide/getting-started' },
-  { text: 'Architecture', link: '/zh/guide/architecture' },
-  { text: 'Configuration', link: '/zh/guide/configuration' },
-  { text: 'Hardware', link: '/zh/guide/hardware' },
-  { text: 'Development', link: '/zh/guide/development' },
-  { text: 'Reference Index', link: '/zh/reference/' }
+  { text: '总览', link: '/zh/' },
+  { text: '快速开始', link: '/zh/guide/getting-started' },
+  { text: '系统架构', link: '/zh/guide/architecture' },
+  { text: '配置说明', link: '/zh/guide/configuration' },
+  { text: '硬件与固件', link: '/zh/guide/hardware' },
+  { text: '开发指南', link: '/zh/guide/development' },
+  { text: 'REST API', link: '/zh/reference/api' },
+  { text: '参考索引', link: '/zh/reference/' }
 ]
 
 export default defineConfig({
@@ -33,6 +35,7 @@ export default defineConfig({
         nav: [
           { text: 'Guide', link: '/en/guide/getting-started' },
           { text: 'Architecture', link: '/en/guide/architecture' },
+          { text: 'API', link: '/en/reference/api' },
           { text: 'Chinese', link: '/zh/' }
         ],
         sidebar: {
@@ -46,12 +49,13 @@ export default defineConfig({
       link: '/zh/',
       themeConfig: {
         nav: [
-          { text: 'Guide', link: '/zh/guide/getting-started' },
-          { text: 'Architecture', link: '/zh/guide/architecture' },
+          { text: '指南', link: '/zh/guide/getting-started' },
+          { text: '架构', link: '/zh/guide/architecture' },
+          { text: 'API', link: '/zh/reference/api' },
           { text: 'English', link: '/en/' }
         ],
         sidebar: {
-          '/zh/': [{ text: 'Guide', items: zhGuide }]
+          '/zh/': [{ text: '指南', items: zhGuide }]
         }
       }
     }
