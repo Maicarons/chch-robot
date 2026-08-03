@@ -18,6 +18,17 @@
 \usepackage{adjustbox}      % 防止图/表超出纸张：max width 约束
 \usepackage{tabularx}       % 宽表自动换行
 \usepackage{float}
+\usepackage{listings}       % 真实代码片段（短、受控）
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=flexible,
+  frame=single,
+  xleftmargin=2em,
+  xrightmargin=2em,
+  aboveskip=6pt,
+  belowskip=6pt
+}
 
 % 允许在 \texttt 的下划线处断行，避免长标识符溢出右边界
 \renewcommand{\_}{\textunderscore\allowbreak}
@@ -65,19 +76,22 @@
 （embodied AI）在棋类场景中的典型体现。
 
 本文系统介绍 CH-RO（Chinese Chess Robot）对弈机器人系统：一套以 Python 服务、Web 操作界面、
-UCI 中国象棋引擎与 STM32 下位机固件构成的完整闭环。在感知层，系统首先建立摄像机针孔成像模型，
-采用 RTMPose 四角关键点检测与透视变换完成棋盘定位，并以单一全局分类器 ONNX 模型一次性输出
-整盘 $90$ 个交叉点的类别（14 种棋子 + 空 + 未识别），避免了逐格检测与目标检测器的调度与后处理开销；
-多帧稳定投票与基于象棋规则的动态走子推断进一步提升了鲁棒性。在认知层，系统通过 UCI 协议驱动
-Pikafish 引擎（UCI\_Variant 设为 xiangqi），并以扩展 FEN 表示棋局状态；本文对 alpha-beta 剪枝、
-迭代加深与 NNUE 神经评估等搜索原理作了说明。在执行层，系统定义了一种仅含五个整数的 ASCII 指令
-协议（startX, startY, endX, endY, signal），经 TCP 端口 8086 下发至 STM32，由下位机完成 SCARA
-逆运动学解算与气泵抓取；完成确认以 “STATE:5, RESULT:1” 握手实现。接口层基于 Flask 提供实时视频、
-单步/连续识别、硬件与仿真双模式对弈的人机交互。论文给出系统模块划分、识别流水线、协议字段与
-坐标映射公式，并以真实代码规模与测试覆盖数据说明工程实现与质量保障。整套系统在解耦、可测试的
-代码架构下运行，可为象棋机器人及类似的“视觉—决策—执行”具身智能系统提供参考。
+UCI 中国象棋引擎与 STM32 下位机固件构成的完整闭环。在感知层，系统建立摄像机针孔成像模型，
+采用 RTMPose 四角关键点检测（底层为 SimCC 坐标分类范式）与透视变换完成棋盘定位，并以单一全局
+分类器 ONNX 模型一次性输出整盘 $90$ 个交叉点的类别（14 种棋子 + 空 + 未识别），避免了逐格检测
+与目标检测器的调度与后处理开销；多帧稳定投票与基于象棋规则的动态走子推断进一步提升了鲁棒性。
+在认知层，系统通过 UCI 协议驱动 Pikafish 引擎（UCI\_Variant 设为 xiangqi），以扩展 FEN 表示棋局
+状态；本文对 alpha-beta 剪枝、迭代加深、静态搜索与 NNUE 神经评估等由引擎提供的搜索原理作了说明，
+并明确这些算法位于所调用的引擎内部，本系统承担的是协议驱动与结果解析职责。在执行层，系统定义了
+一种仅含五个整数的 ASCII 指令协议（\texttt{startX,startY,endX,endY,signal}），经 TCP 端口 8086
+下发至 STM32（ESP8266 透传）下位机，由下位机完成 SCARA 逆运动学解算与气泵抓取；完成确认以
+“\texttt{STATE:5,RESULT:1}”握手实现，且运动指令非幂等、缺失确认即上报而不自动重发。接口层基于
+Flask 提供实时视频、单步/连续识别、硬件与仿真双模式对弈的人机交互。论文逐层给出模块划分、识别
+流水线、协议字段、坐标映射公式与下位机运动学，并以真实代码规模、模型规格与测试覆盖数据说明工程
+实现与质量保障。整套系统在解耦、可测试的纯函数工具包与组合根架构下运行，可为象棋机器人及类似的
+“视觉—决策—执行”具身智能系统提供参考。
 
-\paragraph{关键词} 中国象棋；人机对弈；机器人；视觉识别；RTMPose；UCI 协议；Pikafish；NNUE；STM32；ONNX
+\paragraph{关键词} 中国象棋；人机对弈；机器人；视觉识别；RTMPose；SimCC；UCI 协议；Pikafish；NNUE；STM32；SCARA；ONNX
 
 \clearpage
 \tableofcontents
@@ -111,10 +125,10 @@ Pikafish 引擎（UCI\_Variant 设为 xiangqi），并以扩展 FEN 表示棋局
 算法层面，alpha-beta 剪枝、迭代加深与静态搜索（quiescence search）仍是现代引擎的基石，并在
 《人工智能：一种现代方法》等教材中有系统论述\cite{russell2020ai}。
 
-在引擎接口层面，通用国际象棋接口 UCI（Universal Chess Interface）由 Meyer-Kahlen 等人于 2004 年
-规范，以标准输入/输出文本指令通信\cite{uci2004}；中国象棋则有借鉴 UCI 的 UCCI（Universal Chinese
-Chess Interface）协议\cite{ucci2007} 与扩展棋局表示 XQFEN\cite{xqfen2007}，使不同引擎可在统一协议
-下被调用。Pikafish 在实现上复用 UCI 框架，并通过 UCI\_Variant 选项支持中国象棋变体\cite{pikafish2024}。
+在引擎接口层面，通用国际象棋接口 UCI（Universal Chess Interface）由 Meyer-Kahlen 等人规范，以标准
+输入/输出文本指令通信\cite{uci2004}；中国象棋则有借鉴 UCI 的 UCCI（Universal Chinese Chess
+Interface）协议\cite{ucci2007} 与扩展棋局表示 XQFEN\cite{xqfen2007}，使不同引擎可在统一协议下被调用。
+Pikafish 在实现上复用 UCI 框架，并通过 \texttt{UCI\_Variant} 选项支持中国象棋变体\cite{pikafish2024}。
 自 2018 年 Nasu 提出 NNUE（Efficiently Updatable Neural-Network-based Evaluation）以来，神经评估
 逐渐取代手工评估，成为开源引擎的主流\cite{nasu2018nnue}。
 
@@ -123,18 +137,18 @@ Chess Interface）协议\cite{ucci2007} 与扩展棋局表示 XQFEN\cite{xqfen20
 棋盘存在文字棋子遮挡、纹理不完整等问题，纯角点法鲁棒性不足。近年来，基于关键点的方案展现出优势：
 RTMPose 是 OpenMMLab MMPose 提出的实时多人姿态估计框架，在 COCO 上以 90+ FPS 取得 75.8\% AP，
 可在移动端部署\cite{jiang2023rtmpose,mmpose2023}；其底层采用 SimCC（Simple Coordinate Classification）
-关键点范式，用“坐标分类”替代高斯热图回归，实现高精度与低延迟\cite{li2022simcc}，非常契合约束
-场景下的棋盘四角定位。在棋子识别上，通用目标检测器（如 YOLO\cite{redmon2016yolo}）虽通用，但逐子
-检测存在调度与后处理开销；而受 ImageNet 预训练与深度卷积网络（AlexNet\cite{krizhevsky2012alexnet}、
+关键点范式，用“坐标分类”替代高斯热图回归，实现高精度与低延迟\cite{li2022simcc}，非常契合约束场景
+下的棋盘四角定位。在棋子识别上，通用目标检测器（如 YOLO\cite{redmon2016yolo}）虽通用，但逐子检测
+存在调度与后处理开销；而受 ImageNet 预训练与深度卷积网络（AlexNet\cite{krizhevsky2012alexnet}、
 ImageNet\cite{deng2009imagenet}）启发的“整盘一次性分类”思路，则更适合边缘部署。模型部署侧，ONNX
 提供了开放的神经网络交换格式\cite{onnx2019}，ONNX Runtime 则提供跨平台、支持 CUDA/DML/CPU 多种
 执行提供者的高性能推理后端\cite{onnxruntime2024}，便于将训练好的模型部署到异构硬件。
 
 在机械执行层面，棋类机器人早期以西洋棋机械臂为主，核心难点在于棋子抓取规划与视觉定位。SCARA
 等平面关节机器人的运动学建模与控制已有成熟教材体系\cite{craig2017robotics,siciliano2016handbook}，
-而 STM32 等低成本微控制器凭借丰富的定时器与通信外设，常作为下位机承担逆解与电机/气泵时序
-\cite{stm32f103}。本文工作正是在上述“强引擎 + 关键点视觉 + 边缘推理 + 低成本下位机”的技术
-成熟度基础上，构建一套完整、可解耦、可测试的中国象棋对弈机器人。
+而 STM32 等低成本微控制器凭借丰富的定时器与通信外设，常作为下位机承担逆解与电机/气泵时序\cite{stm32f103}。
+本文工作正是在上述“强引擎 + 关键点视觉 + 边缘推理 + 低成本下位机”的技术成熟度基础上，构建一套
+完整、可解耦、可测试的中国象棋对弈机器人。
 
 \section{问题与挑战}
 将软件博弈闭环到物理机器人，面临三方面挑战：
@@ -148,27 +162,32 @@ ImageNet\cite{deng2009imagenet}）启发的“整盘一次性分类”思路，�
 \end{enumerate}
 
 \section{研究目标与主要贡献}
-本文目标是给出一套\textbf{可解耦、可测试、可联调}的中国象棋对弈机器人完整实现，并就其关键设计
-给出严谨描述。主要贡献如下：
+本文目标是给出一套\textbf{可解耦、可测试、可联调}的中国象棋对弈机器人完整实现，并就其关键设计给出
+严谨描述。主要贡献如下：
 \begin{enumerate}[label=(\arabic*)]
   \item 提出“感知—认知—执行—接口”四层系统架构，并以纯函数工具包、命令行包、Web 组合根等方式
         实现模块解耦（模块规模见表~\ref{tab:scale}），使视觉、决策、控制可独立测试。
   \item 设计轻量棋盘识别方案：建立摄像机针孔模型，以 RTMPose 四角关键点完成透视校正，再以单一
         全局分类器一次性输出全棋盘 $90$ 个交叉点类别，避免逐格检测与目标检测器的推理开销。
   \item 定义并实现一种仅含五个整数的 ASCII 五值指令协议与持久化 TCP 客户端，配合 STM32 下位机的
-        运动学解算与“STATE:5, RESULT:1”完成确认握手，保证走子的确定性。
+        运动学解算与“\texttt{STATE:5,RESULT:1}”完成确认握手，保证走子的确定性。
   \item 提供硬件/仿真双模式与基于 Flask 的 Web 操作界面，使系统在无实体机械臂时亦可完成端到端联调。
 \end{enumerate}
 
 \section{论文结构}
-第~\ref{ch:arch} 章给出系统总体架构；第~\ref{ch:vision} 章详述视觉识别流水线及其数学原理；
-第~\ref{ch:ai} 章介绍决策引擎、搜索原理与棋局表示；第~\ref{ch:robot} 章阐述机械臂控制协议、
+第~\ref{ch:arch} 章给出系统总体架构与层间数据契约；第~\ref{ch:vision} 章详述视觉识别流水线及其数学
+原理；第~\ref{ch:ai} 章介绍决策引擎、搜索原理与棋局表示；第~\ref{ch:robot} 章阐述机械臂控制协议、
 坐标映射、TCP 握手与固件实现；第~\ref{ch:web} 章说明软件编排与 Web 仿真；第~\ref{ch:eng} 章给出
-工程实现与质量保障数据；第~\ref{ch:exp} 章汇总真实系统指标；第~\ref{ch:disc} 章讨论设计权衡与局限；
-第~\ref{ch:conc} 章总结并展望未来工作。
+工程实现与质量保障数据；第~\ref{ch:exp} 章汇总真实系统指标；第~\ref{ch:conc} 章总结并展望未来工作。
+
+\subsection*{本章小结}
+本章从棋类博弈与具身智能的背景出发，梳理了引擎、协议、视觉与执行四个方向的研究现状，明确了将
+软件博弈闭环到物理机器人所面临的三大挑战，并由此引出本文的四层架构设计与四项主要贡献。后续各章
+将逐层展开：先给出总体架构与数据契约，再依次深入感知、认知、执行与接口四个层次，最后以工程实现
+与系统指标佐证方案的可行性与质量。
 
 % ============================================================
-\chapter{系统总体架构}
+\chapter{系统总体架构与数据契约}
 \label{ch:arch}
 CH-RO 系统由感知、认知、执行与接口四个层次构成，各层之间仅通过明确的数据契约（图像帧、FEN 字符串、
 五值指令、ACK 报文）耦合，从而支持独立替换与测试。整体架构如图~\ref{fig:arch} 所示。
@@ -223,15 +242,56 @@ CH-RO 系统由感知、认知、执行与接口四个层次构成，各层之�
 \midrule
 \texttt{xq\_utils} & FENUtils, CoordinateUtils, MoveNotationUtils, BoardUtils & 中国象棋 FEN 解析/生成、棋盘坐标与 UCI 互转、简化 WXF/中文记谱 \\
 \texttt{vision} & BoardRecognizer, CameraManager, ChessboardDetector & 摄像头采集、棋盘定位、整盘识别、多帧稳定与动态走子推断 \\
-\texttt{core} & ChessboardDetector(ONNX) & RTMPose 四角关键点与全局分类器的推理核心 \\
-\texttt{ai} & AIEngine & Pikafish UCI 引擎封装（position/go/bestmove） \\
-\texttt{robot} & RobotPersistentClient, uci\_to\_arm\_command & 五值指令协议、持久化 TCP 客户端、UCI 到机械臂指令映射 \\
+\texttt{core} & RTMPOSE\_ONNX, FULL\_CLASSIFIER\_ONNX, ChessboardDetector & RTMPose 四角关键点与全局分类器的 ONNX 推理核心 \\
+\texttt{ai} & AIEngine & Pikafish UCI 引擎封装（uci/position/go/bestmove 解析） \\
+\texttt{robot} & RobotPersistentClient, BoardToArmConfig, uci\_to\_arm\_command & 五值指令协议、持久化 TCP 客户端、UCI 到机械臂指令映射 \\
 \texttt{game\_manager} & GameManager & 无界面（仿真）对弈主循环编排 \\
 \texttt{web\_simulation} & app, domain, robot\_cmd, game\_logic & Flask 组合根、纯棋局函数、机器人指令封装、状态机与路由 \\
 \texttt{config.py} & 模块级常量 & 摄像头、棋盘、引擎、机器人网络与标定的集中配置 \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\section{运行时组合与依赖关系}
+系统的可测试性不仅来自“纯函数包 + 职责包”的静态划分，更来自运行时的\textbf{组合根}模式。
+\texttt{web\_simulation/app.py} 作为组合根，持有可变的共享 \texttt{game\_state} 字典与若干长生命周期
+组件（识别器、引擎、机器人控制器、TCP 客户端）；这些组件并非在导入时实例化，而是由
+\texttt{services.py} 中的工厂以\textbf{懒加载单例}方式创建——例如 \texttt{get\_recognizer} 保证并发
+请求只构造一个识别器实例，\texttt{get\_robot\_tcp\_client} 在主机/端口变化时才重建持久连接。这种
+“依赖在使用处解析、实例全局唯一”的安排，使单元测试可以分别替换任意一层：视觉测试可注入合成的
+棋盘帧，协议测试可直接构造 \texttt{RobotArmCommand} 而无需真实 TCP，领域逻辑测试可在无浏览器环境下
+覆盖纯函数。图~\ref{fig:compose} 给出组合根与各层的依赖关系。
+
+\begin{figure}[H]
+\centering
+\adjustbox{max width=\textwidth}{%
+\begin{tikzpicture}[
+    box/.style={rectangle, draw, rounded corners, minimum height=0.95cm, minimum width=4.2cm,
+                align=center, font=\small, fill=#1!10},
+    dep/.style={-{Latex[length=2.2mm]}, thick, gray!70!black}
+  ]
+  \node[box=blue]   (root)  {app.py\\组合根 + game\_state};
+  \node[box=teal, below left=0.5cm and -0.3cm of root] (svc) {services.py\\懒加载工厂};
+  \node[box=orange, below=0.5cm of svc] (dom) {domain.py\\纯棋局函数};
+  \node[box=red,   below left=0.5cm and -0.2cm of svc] (vis) {recognizer\\(vision+core)};
+  \node[box=violet,below right=0.5cm and -0.2cm of svc] (ai)  {AIEngine\\(ai)};
+  \node[box=green, below=0.5cm of svc] (rob) {RobotPersistentClient\\(robot)};
+  \draw[dep] (root) -- (svc);
+  \draw[dep] (svc) -- (vis);
+  \draw[dep] (svc) -- (ai);
+  \draw[dep] (svc) -- (rob);
+  \draw[dep] (svc) -- (dom);
+  \draw[dep] (root) -- (dom);
+\end{tikzpicture}}
+\caption{组合根（app.py）通过 services.py 的懒加载工厂解析各层依赖；domain.py 为不依赖 I/O 的纯函数，
+便于独立测试。}
+\label{fig:compose}
+\end{figure}
+
+\subsection*{本章小结}
+本章确立了“感知—认知—执行—接口”四层架构，定义了层间以 FEN、五值指令与 ACK 报文为载体的数据契约，
+并以模块职责表与组合根依赖图说明系统如何通过纯函数包与懒加载单例实现解耦与可测试性。后续章节将
+沿数据流方向，自感知层逐层向下展开。
 
 % ============================================================
 \chapter{视觉感知与棋盘识别}
@@ -265,9 +325,11 @@ CH-RO 系统由感知、认知、执行与接口四个层次构成，各层之�
 \section{图像采集与摄像机模型}
 \label{sec:camera}
 系统支持两类图像来源：本地 USB 摄像头（通过 OpenCV \texttt{VideoCapture} 采集）与网络摄像头
-（如 Orange Pi / Raspberry Pi 提供的 MJPEG 快照或流，由 \texttt{HttpSnapshotCapture} 拉取）\cite{bradski2000opencv}。
+（如 Orange Pi / Raspberry Pi 提供的 MJPEG 快照或流，由 \texttt{HttpSnapshotCapture} 用
+\texttt{urllib} 抓取 JPEG/MJPEG，并以 SOI/EOI（\texttt{0xFFD8}/\texttt{0xFFD9}）切帧）\cite{bradski2000opencv}。
 采集参数由 \texttt{config.py} 集中配置：分辨率 $640\times480$、帧率 $30$~FPS、设备索引 1，并可在
-启动时通过 \texttt{startup.py} 覆盖。
+启动时通过 \texttt{startup.py} 覆盖。识别前若图像宽度超过 \texttt{CHRO\_RECOGNITION\_MAX\_WIDTH}
+（默认 $960$~px），会先按比例下采样以降低推理负担。
 
 从几何上看，摄像头成像可建模为针孔模型：三维世界点 $\mathbf{X}=[X,Y,Z]^{\top}$ 经投影矩阵
 $\mathbf{P}$ 映射到图像像素 $\mathbf{x}\sim\mathbf{P}\mathbf{X}$。当摄像头近似垂直俯视棋盘时，
@@ -278,6 +340,10 @@ $\mathbf{P}$ 映射到图像像素 $\mathbf{x}\sim\mathbf{P}\mathbf{X}$。当摄
 \label{sec:locate}
 与依赖规则棋盘纹理的 \texttt{findChessboardCorners} 不同，本系统使用一个定制 RTMPose ONNX 模型，
 直接预测棋盘的\textbf{四个角点}（记为 A0、A8、J0、J8，分别对应左上、右上、左下、右下交叉点）\cite{jiang2023rtmpose,li2022simcc}。
+RTMPose 的底层采用 SimCC（Simple Coordinate Classification）关键点范式：它不回归高斯热图峰值，
+而是将两个坐标轴上的位置各自离散为 $512$ 个 bin 进行分类，输出形状为 $4\times512$ 的“坐标分类”
+张量，再以 argmax 还原亚像素坐标。该范式在约束场景下对小目标角点尤为稳定，且推理开销低。
+
 四点经有效性门限（形状为 $(4,2)$、四角置信度均不低于 $0.20$、边距容差 $80$ 像素）校验后，通过
 单应矩阵将原始图像校正为归一化俯视图。
 
@@ -295,19 +361,21 @@ h_{31} & h_{32} & h_{33}
 \end{bmatrix},
 \end{equation}
 其中 $\lambda$ 为尺度因子，$\mathbf{H}$ 含 $8$ 个自由度（在归一化 $h_{33}=1$ 下）。已知四对对应点
-即可列出 $8$ 个线性方程唯一求解 $\mathbf{H}$。系统调用 OpenCV 的 \texttt{getPerspectiveTransform}
-完成该求解，并将原始图像以 \texttt{warpPerspective} 校正为 $450\times500$ 像素的俯视图（即每列 $50$
-像素、每行 $50$ 像素）\cite{hartley2004mvp}。由于姿态模型推理开销较大，系统对关键点结果进行缓存
+即可列出 $8$ 个线性方程唯一求解 $\mathbf{H}$——这就是经典的\textbf{直接线性变换（DLT）}闭式解。
+系统调用 OpenCV 的 \texttt{getPerspectiveTransform}（其内部即 DLT 求解）完成该过程，并将原始图像
+以 \texttt{warpPerspective} 校正为 $450\times500$ 像素的俯视图（目标角点带 $50$~px 内边距，故每格
+约 $50$ 像素）\cite{hartley2004mvp}。由于姿态模型推理开销较大，系统对关键点结果进行缓存
 （默认刷新间隔 $8.0$~s 或最多 $120$ 帧），在不移动摄像头的前提下避免每帧重算。
 
 \section{整盘棋子分类}
 \label{sec:classify}
-校正后的整张棋盘图像被\textbf{一次性}送入一个全局分类器 ONNX 模型，输出形状为 $90\times16$ 的张量，
-即 $10$ 行 $\times$ $9$ 列共 $90$ 个交叉点，每个点对应一个 $16$ 维 softmax。这 $16$ 个类别包含
-“空”（\texttt{.}）、“未识别”（\texttt{x}）以及红黑双方的 $14$ 种棋子，具体映射如表~\ref{tab:classes}
-所示。相比逐格裁剪分类或通用目标检测器（如 YOLO\cite{redmon2016yolo}），整盘一次性推理显著降低了
-调度与后处理开销，也更契合嵌入式/边缘部署场景。默认模型 \texttt{nano\_v3-0319.onnx} 输入为先中心
-裁剪至 $400\times450$ 再缩放至 $280\times315$，采用 ImageNet 均值/方差归一化\cite{deng2009imagenet,krizhevsky2012alexnet}。
+校正后的整张棋盘图像被\textbf{一次性}送入一个全局分类器 ONNX 模型（\texttt{FULL\_CLASSIFIER\_ONNX}），
+输出形状为 $90\times16$ 的张量，即 $10$ 行 $\times$ $9$ 列共 $90$ 个交叉点，每个点对应一个 $16$ 维
+softmax。这 $16$ 个类别包含“空”（\texttt{.}）、“未识别”（\texttt{x}）以及红黑双方的 $14$ 种棋子，
+具体映射如表~\ref{tab:classes} 所示。相比逐格裁剪分类或通用目标检测器（如 YOLO\cite{redmon2016yolo}），
+整盘一次性推理显著降低了调度与后处理开销，也更契合嵌入式/边缘部署场景。默认模型
+\texttt{nano\_v3-0319.onnx} 的预处理为先中心裁剪至 $400\times450$ 再缩放至 $280\times315$，
+采用 ImageNet 均值/方差归一化\cite{deng2009imagenet,krizhevsky2012alexnet}。
 
 \begin{table}[H]
 \centering
@@ -329,11 +397,35 @@ h_{31} & h_{32} & h_{33}
 \label{sec:stable}
 单帧识别存在抖动与误检。系统以 \texttt{StableBoardBuffer} 维护最近 $N$ 帧（默认窗口
 \texttt{STABLE\_WINDOW}=5）的棋盘投票，某交叉点需出现在不少于 $\lceil N\times\texttt{STABLE\_RATIO}\rceil$
-帧（\texttt{STABLE\_RATIO}=0.60）方判定为“稳定”。在此之上，\texttt{DynamicBoardTracker} 以首张
-稳定棋盘为基线，通过比较占用变化推断人类的一步走子：常规走子对应“一处消失 + 一处出现”；吃子对应
-“一处消失 + 一处改变”。为过滤噪声，系统内置基于中国象棋规则的合法性校验
-（\texttt{\_is\_legal\_xiangqi\_move}，覆盖兵/炮/马/象/士/将的走法与“蹩马腿”“塞象眼”等约束），
-并对高噪声情形做容错处理。
+帧（\texttt{STABLE\_RATIO}=0.60）方判定为“稳定”，其中“空”与“未识别”不参与计数。在此之上，
+\texttt{DynamicBoardTracker} 以首张稳定棋盘为基线，通过比较占用变化推断人类的一步走子，其内部状态
+机如图~\ref{fig:tracker} 所示：初始处于 \texttt{observing}，首次锁定后进入 \texttt{initial\_locked}；
+之后每次与基线比较，归一为“未变化（unchanged）”“一步走子（move）”或“非法变化（invalid\_change）”。
+正常走子对应“一处消失 + 一处出现”；吃子对应“一处消失 + 一处改变”。为过滤噪声，系统内置基于中国
+象棋规则的合法性校验（\texttt{\_is\_legal\_xiangqi\_move}，覆盖兵/炮/马/象/士/将的走法与“蹩马腿”
+“塞象眼”等约束），并对高噪声情形做容错处理（允许少量可忽略的噪声点，按距离与噪声数打分择优）。
+
+\begin{figure}[H]
+\centering
+\adjustbox{max width=0.8\textwidth}{%
+\begin{tikzpicture}[
+    st/.style={rectangle, draw, rounded corners, minimum height=0.9cm, minimum width=2.6cm,
+               align=center, font=\small, fill=blue!8},
+    arr/.style={-{Latex[length=2.2mm]}, thick}
+  ]
+  \node[st] (obs) {observing\\(观测)};
+  \node[st, right=1.1cm of obs] (lock) {initial\_locked\\(基线锁定)};
+  \node[st, right=1.1cm of lock] (mv)  {move\\(一步走子)};
+  \node[st, below=1.0cm of lock, fill=orange!12] (inv) {invalid\_change\\(非法/噪声)};
+  \draw[arr] (obs) -- node[above,font=\tiny] {首张稳定} (lock);
+  \draw[arr] (lock) -- node[above,font=\tiny] {1 消失+1 出现} (mv);
+  \draw[arr] (lock) -- node[left,font=\tiny] {占用差非法} (inv);
+  \draw[arr] (inv) -- node[below,font=\tiny] {重新对齐基线} (obs);
+  \draw[arr] (mv) to[out=120, in=60, distance=0.8cm] node[above,font=\tiny] {更新基线} (lock);
+\end{tikzpicture}}
+\caption{DynamicBoardTracker 的状态机：以首张稳定棋盘为基线，依据占用变化推断走子或判为噪声。}
+\label{fig:tracker}
+\end{figure}
 
 \section{真实棋盘图像示例}
 图~\ref{fig:photo} 给出系统在实际部署中采集的一张棋盘图像（已用于调试棋盘定位与分类），可见
@@ -346,24 +438,36 @@ h_{31} & h_{32} & h_{33}
 \label{fig:photo}
 \end{figure}
 
+\subsection*{本章小结}
+本章完整给出了视觉子系统的技术路线：从针孔成像建模出发，用 RTMPose/SimCC 四角关键点与 DLT 单应
+完成透视校正，以单一全局分类器一次性输出整盘 $90$ 个交叉点类别，并通过多帧投票与基于规则的动态
+走子推断抑制单帧噪声。该方案以“定位 + 整盘分类”替代“逐格检测 + 目标检测器”，在边缘算力下兼顾
+了准确率与延迟。
+
 % ============================================================
 \chapter{棋局决策引擎与棋局表示}
 \label{ch:ai}
+本章说明认知层如何把感知层给出的 FEN 转化为一步推荐着法。需要强调的是：本系统\textbf{不实现}
+搜索与评估算法，而是作为 UCI 客户端驱动 Pikafish（Stockfish 的中国象棋分支）；alpha-beta 剪枝、
+迭代加深、静态搜索与 NNUE 神经评估均位于所调用引擎内部。下文先给出本系统的协议驱动与结果解析
+职责，再对引擎所采用的搜索原理作背景性说明。
 
 \section{Pikafish 与 UCI 协议}
 \label{sec:uci}
 认知层通过 UCI 协议驱动 Pikafish 引擎\cite{pikafish2024,uci2004}。\texttt{AIEngine} 的启动序列为：
 发送 \texttt{uci} 并等待 \texttt{uciok}；设置 \texttt{UCI\_Variant value xiangqi} 以启用中国象棋变体；
 设置 \texttt{Skill Level}（取自 \texttt{ENGINE\_DEPTH}=15）与可选的 \texttt{Hash}（\texttt{HASH\_SIZE\_MB}=128）。
-决策时，引擎以 \texttt{position fen <FEN> [moves ...]} 载入局面，再以 \texttt{go depth 15} 搜索，
-解析 stdout 中的 \texttt{bestmove} 作为推荐着法；\texttt{analyze\_position} 则改用 \texttt{go movetime}
+此处 \texttt{ENGINE\_DEPTH} 同时被复用为“棋力等级”与“搜索深度”两处参数，是本系统一处务实但需留意的
+设计约定。决策时，引擎以 \texttt{position fen <FEN> [moves ...]} 载入局面，再以 \texttt{go depth 15}
+搜索，解析 stdout 中的 \texttt{bestmove} 作为推荐着法；\texttt{analyze\_position} 则改用 \texttt{go movetime}
 并解析 \texttt{info ... score cp/depth/pv} 以呈现评分与主要变化。默认引擎二进制为
-\texttt{Pikafish/pikafish-avx2.exe}，配套 NNUE 权重约 $50.8$~MiB。
+\texttt{Pikafish/pikafish-avx2.exe}，配套 NNUE 权重约 $50.8$~MiB。Web 端 \texttt{/api/ai\_move} 出于
+响应速度考虑，默认以较轻的 \texttt{go depth 8} 调用。
 
-\section{搜索引擎原理}
+\section{搜索引擎原理（引擎侧）}
 \label{sec:search}
-现代棋类引擎的搜索以\textbf{极小化极大（minimax）}框架为基础：在博弈树上交替最大化己方、最小化
-对方收益。为在有限时间内深入搜索，引擎普遍采用以下技术\cite{russell2020ai}：
+作为背景，现代棋类引擎的搜索以\textbf{极小化极大（minimax）}框架为基础：在博弈树上交替最大化己方、
+最小化对方收益。为在有限时间内深入搜索，引擎普遍采用以下技术\cite{russell2020ai}：
 \begin{itemize}[itemsep=2pt]
   \item \textbf{alpha-beta 剪枝}：在遍历博弈树时维护 $\alpha$（己方已可保证的下界）与 $\beta$
         （对方已可保证的上界），一旦区间为空即剪掉该子树，可将有效分支因子由 $b^d$ 降至约 $b^{d/2}$。
@@ -375,6 +479,8 @@ h_{31} & h_{32} & h_{33}
         手工评估函数，显著提升棋力\cite{nasu2018nnue}。本系统 NNUE 权重约 $50.8$~MiB，由引擎在
         启动时载入。
 \end{itemize}
+上述算法由 Pikafish 在 UCI 协议内部完成；本系统只负责设参与解析 \texttt{info} / \texttt{bestmove}，
+从而把“强引擎”作为可替换的能力模块接入系统。
 
 \section{中国象棋 FEN 与坐标表示}
 \label{sec:fen}
@@ -409,6 +515,11 @@ h_{31} & h_{32} & h_{33}
 记法间互转。UCI 以“起点列行 + 终点列行”编码；中文记法则以“棋子名 + 起点路数/线数 + 进退/平 + 终点”
 表达（如“炮二平五”），二者通过 \texttt{xq\_utils/coordinates.py} 中的列行索引换算衔接。
 
+\subsection*{本章小结}
+本章澄清了认知层的职责边界：本系统是 Pikafish 的 UCI 客户端，承担启动、设参与 \texttt{bestmove}/
+\texttt{info} 解析，而非自行实现搜索；文中对 alpha-beta、迭代加深、静态搜索与 NNUE 的说明均指向引擎
+内部实现。扩展 FEN 与记谱转换构成了感知层与认知层之间的标准数据契约。
+
 % ============================================================
 \chapter{机械臂控制与通信协议}
 \label{ch:robot}
@@ -421,8 +532,8 @@ h_{31} & h_{32} & h_{33}
 \end{quote}
 其中 \texttt{signal}=0 表示普通移动，\texttt{signal}=1 表示吃子（抓取目标位已有棋子）。所有角度解算
 与气泵时序均在 STM32 下位机侧完成。该协议经 \textbf{TCP 端口 8086} 下发，默认主机为
-\texttt{192.168.0.102}。协议字段语义如表~\ref{tab:proto} 所示。极小的协议表面积使上位机逻辑简单、
-易于测试（协议测试直接断言几何与 ACK）。
+\texttt{192.168.0.102}；每条指令以 CRLF（\texttt{\textbackslash r\textbackslash n}）成帧。协议字段语义
+如表~\ref{tab:proto} 所示。极小的协议表面积使上位机逻辑简单、易于测试（协议测试直接断言几何与 ACK）。
 
 \begin{table}[H]
 \centering
@@ -435,9 +546,9 @@ h_{31} & h_{32} & h_{33}
 \midrule
 startX, startY & 起点在机械臂坐标系下的 $x,y$（毫米） \\
 endX, endY & 终点在机械臂坐标系下的 $x,y$（毫米） \\
-signal & 0=普通移动；1=吃子（需先移走被吃子） \\
-帧格式 & 以 \textbackslash r\textbackslash n（CRLF）结尾；归位指令为 \texttt{-17.1848,-55.6304,0,0,99} \\
-完成确认 & 下位机回复含 \texttt{STATE:5} 且 \texttt{RESULT:1} 的报文表示动作完成 \\
+signal & 0=普通移动；1=吃子（需先移走被吃子）；99=归位（startX/startY 解释为 M1/M2 相对角） \\
+帧格式 & 以 CRLF 结尾；归位指令为 \texttt{-17.1848,-55.6304,0,0,99} \\
+完成确认 & 下位机回复含 \texttt{STATE:5} 且 \texttt{RESULT:1}（归位另含 \texttt{CMD:99}）表示动作完成 \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -445,21 +556,20 @@ signal & 0=普通移动；1=吃子（需先移走被吃子） \\
 \section{棋盘坐标到机械臂坐标的映射}
 \label{sec:mapping}
 机械臂坐标系以棋盘\textbf{右上角交叉点}（黑方右车位）为原点。设第 $f$ 列（$0\le f\le 8$）、
-第 $r$ 行（$0\le r\le 9$，$r=9$ 为黑方底线）的交叉点到原点的映射为
-\begin{equation}
-\label{eq:map}
-\begin{aligned}
-x &= x_0 + (8 - f)\times s_f, \\
-y &= y_0 + (9 - r)\times s_r + \delta_r, \\
-\delta_r &= \begin{cases}
-s_{\text{river}} - s_r, & r \le 4 \quad\text{（红方半场，叠加河界间隔）}\\
-0, & r > 4
-\end{cases}
-\end{aligned}
-\end{equation}
-其中列间距 $s_f=34$~mm、普通行间距 $s_r=30$~mm、河界行间距 $s_{\text{river}}=32$~mm。由此可得棋盘
-总宽 $34\times 8 = 272$~mm、总高 $30\times 8 + 32 = 272$~mm，即 $272\times272$~mm 的正方形盘面
-（图~\ref{fig:geom}）。该几何与固件文档的测量值一致，是上位机与下位机对齐的物理基础。
+第 $r$ 行（$0\le r\le 9$，$r=9$ 为黑方底线）的交叉点到原点的映射由 \texttt{BoardToArmConfig.point\_for\_square}
+实现，其核心逻辑为
+\begin{lstlisting}[language=Python, caption={坐标映射核心（节选自 robot/protocol.py）}]
+vertical_intervals = 9 - rank
+river_extra = (river_spacing_mm - rank_spacing_mm) if rank <= 4 else 0
+return (
+    origin_x + (8 - file_index) * file_spacing_mm,
+    origin_y + vertical_intervals * rank_spacing_mm + river_extra,
+)
+\end{lstlisting}
+代入列间距 $s_f=34$~mm、普通行间距 $s_r=30$~mm、河界行间距 $s_{\text{river}}=32$~mm，可得棋盘
+总宽 $34\times 8 = 272$~mm；纵向因红方半场（第 $0\!-\!4$ 行）每行叠加 $+2$~mm 的河界间隔，使跨越
+河界的唯一一段间距为 $32$~mm，总高亦为 $30\times 8 + 2 = 272$~mm，即 $272\times272$~mm 的正方形
+盘面（图~\ref{fig:geom}）。该几何与固件文档的测量值一致，是上位机与下位机对齐的物理基础。
 
 \begin{figure}[H]
 \centering
@@ -485,14 +595,15 @@ s_{\text{river}} - s_r, & r \le 4 \quad\text{（红方半场，叠加河界间�
 \label{sec:handshake}
 \texttt{RobotPersistentClient} 以 \texttt{socket.create\_connection} 建立长连接，并设置
 \texttt{SO\_KEEPALIVE} 与 \texttt{TCP\_NODELAY}。每条指令以 CRLF 成帧；\texttt{send\_robot\_command}
-阻塞直至收到 \texttt{motion\_acknowledged}（要求响应同时含 \texttt{STATE:5} 与 \texttt{RESULT:1}），
-由于运动指令非幂等，客户端在缺失 ACK 时\textbf{不自动重发}而直接报错。归位指令
-\texttt{send\_homing\_command} 发送 \texttt{-17.1848, -55.6304, 0, 0, 99}（命令号 99 标记归位），
-并等待 \texttt{homing\_acknowledged}。Web 端在硬件模式下启动对局前必须先完成归位握手，否则以
-HTTP 503 拒绝开局。\texttt{UCI\_Variant=xiangqi} 的 Pikafish 使用 $0$--$9$ 的行列编号，因此
-\texttt{uci\_to\_arm\_command} 直接按该约定解析并调用式~(\ref{eq:map}) 完成映射。
+阻塞直至收到 \texttt{motion\_acknowledged}（要求响应同时含 \texttt{STATE:5} 与 \texttt{RESULT:1}，
+且不含 \texttt{CMD:99}），由于运动指令非幂等，客户端在缺失 ACK 时\textbf{不自动重发}而直接报错。
+归位指令 \texttt{send\_homing\_command} 发送 \texttt{-17.1848, -55.6304, 0, 0, 99}（\texttt{signal}=99
+标记归位，startX/startY 被下位机解释为 M1/M2 相对转角，单位为度），并等待
+\texttt{homing\_acknowledged}（要求 \texttt{STATE:5,RESULT:1} 且该回执含 \texttt{CMD:99}）。Web 端在
+硬件模式下启动对局前必须先完成归位握手，否则以 HTTP 503 拒绝开局。
 
-上位机与 STM32 之间的典型交互时序如图~\ref{fig:seq} 所示。
+上位机与 STM32 之间的典型交互时序如图~\ref{fig:seq} 所示。ACK 解析同时支持“仅 \texttt{1}”与
+“\texttt{STATE:5,RESULT:1}”两种旧/新固件回执格式，并严格以 \texttt{CMD:99} 区分归位与普通走子。
 
 \begin{figure}[H]
 \centering
@@ -502,7 +613,7 @@ HTTP 503 拒绝开局。\texttt{UCI\_Variant=xiangqi} 的 Pikafish 使用 $0$--$
   \draw[->] (6,0) -- (6,-8) node[below] {STM32 下位机};
   \draw[->,thick] (0,-0.6) -- node[above,font=\tiny,align=center] {TCP connect\\(端口 8086)} (6,-0.6);
   \draw[->,thick] (0,-1.8) -- node[above,font=\tiny,align=center] {homing 指令\\(-17.18,-55.63,0,0,99)} (6,-1.8);
-  \draw[<-,thick] (0,-3.0) -- node[above,font=\tiny,align=center] {STATE:5\\RESULT:1} (6,-3.0);
+  \draw[<-,thick] (0,-3.0) -- node[above,font=\tiny,align=center] {STATE:5\\RESULT:1,CMD:99} (6,-3.0);
   \draw[->,thick] (0,-4.2) -- node[above,font=\tiny,align=center] {move 指令\\(sx,sy,ex,ey,sig)} (6,-4.2);
   \draw[<-,thick] (0,-5.4) -- node[above,font=\tiny,align=center] {STATE:5\\RESULT:1} (6,-5.4);
   \draw[->,thick,dotted] (0,-6.6) -- node[above,font=\tiny] {重复 move + ACK} (6,-6.6);
@@ -513,8 +624,11 @@ HTTP 503 拒绝开局。\texttt{UCI\_Variant=xiangqi} 的 Pikafish 使用 $0$--$
 
 \section{STM32 下位机实现与运动学}
 \label{sec:firmware}
-激活的固件 \texttt{firmware/stm32-f103-angle-plan} 在 STM32F103 上以 \texttt{sscanf} 解析
-五整数格式的指令串 \texttt{"\%d, \%d, \%d, \%d, \%d"}，于片内完成运动学解算与气泵抓取时序\cite{stm32f103}。
+激活的固件位于 \texttt{firmware/stm32-f103-keil-robot}：ESP8266 在 TCP 8086 上监听，解析 \texttt{+IPD,} 后的数据，并以
+\texttt{sscanf(data,"\%d,\%d,\%d,\%d,\%d",\&x1,\&y1,\&x2,\&y2,\&sig)}
+提取五整数后写入 \texttt{RobotCmd} 结构体\cite{stm32f103}。归位时 \texttt{signal}=99，下位机将
+\texttt{startX/startY} 直接作为 M1/M2 相对转角（度）执行；普通走子则进入 SCARA 运动学解算。
+
 以平面 SCARA 型机械臂为例，其正向运动学为
 \begin{equation}
 \label{eq:fk}
@@ -523,11 +637,33 @@ x &= L_1\cos\theta_1 + L_2\cos(\theta_1+\theta_2), \\
 y &= L_1\sin\theta_1 + L_2\sin(\theta_1+\theta_2),
 \end{aligned}
 \end{equation}
-下位机依据目标 $(x,y)$ 反解关节角 $(\theta_1,\theta_2)$ 后，由定时器输出 PWM 驱动步进/伺服电机，
-并以 GPIO 控制气泵电磁阀完成“吸起—平移—放下”的移子动作\cite{craig2017robotics}。系统中另保留一个
-\textbf{已弃用}的 JSON 传输栈（\texttt{robot/legacy\_tcp\_client.py} 经 TCP 端口 5000 下发 JSON，
-配套 \texttt{firmware/stm32-tcp-server}），它不再被主程序使用，仅作为历史固件的兼容客户端保留。
-论文明确区分二者，以免混淆激活路径。
+下位机依据目标 $(x,y)$ 反解关节角 $(\theta_1,\theta_2)$。\texttt{ik.c} 中的实际逆解（先平移到基座
+局部坐标 $x_l=x-\text{base}_x,\;y_l=y-\text{base}_y$）为
+\begin{lstlisting}[language=C, caption={SCARA 逆运动学（节选自 firmware/stm32-f103-keil-robot/ik.c）}]
+float r_sq = x_l*x_l + y_l*y_l;
+float cos_q2 = (r_sq - L1*L1 - L2*L2) / (2*L1*L2);
+cos_q2 = clamp(cos_q2, -1, 1);          // 越界置错误位
+q2 = acosf(cos_q2);
+term1 = atan2f(y_l, x_l);
+term2 = atan2f(L2*sinf(q2), L1 + L2*cosf(q2));
+q1 = term1 - term2;                     // 肩角 - 肘角
+\end{lstlisting}
+即标准两连杆平面 SCARA 逆解：由余弦定理求肘角、由几何关系求肩角。本系统实例化参数为
+$L_1=L_2=220$~mm、基座偏移 $\text{base}_x=136$~mm、$\text{base}_y=-100$~mm。解算得到关节角后，
+由定时器输出 PWM 驱动步进/伺服电机，并以 GPIO 控制气泵电磁阀完成“吸起—平移—放下”的移子动作
+\cite{craig2017robotics}。气泵由 TIM2 产生 50\,Hz（周期 20\,ms）PWM，脉宽 500\,µs 为关、2500\,µs 为开
+（标准电磁阀/舵机脉宽），经 \texttt{Pump\_On/Off} 与 \texttt{Valve\_On/Off} 切换完成抓取时序。
+
+系统中另保留一个\textbf{已弃用}的 JSON 传输栈（\texttt{robot/legacy\_tcp\_client.py} 经 TCP 端口 5000
+下发 JSON，配套 \texttt{firmware/stm32-tcp-server}），它不再被主程序使用，仅作为历史固件的兼容客户端
+保留。论文明确区分二者，以免混淆激活路径。
+
+\subsection*{本章小结}
+本章给出了执行层的完整技术细节：以五值 ASCII 协议与 CRLF 成帧实现极小表面积的指令通道；以
+右上角原点 + 34/30/32\,mm 几何完成棋盘到机械臂的精确映射；以持久化 TCP 客户端与
+\texttt{STATE:5,RESULT:1}（归位另含 \texttt{CMD:99}）握手保证确定性，并坚持“非幂等指令缺失 ACK 即
+上报、不重发”的可靠原则；下位机在 STM32+ESP8266 上以 SCARA 逆运动学与 50\,Hz PWM 气泵时序完成
+物理移子。文中还区分了激活的五值 8086 栈与已弃用的 JSON 5000 栈。
 
 % ============================================================
 \chapter{软件编排与 Web 仿真}
@@ -543,14 +679,45 @@ y &= L_1\sin\theta_1 + L_2\sin(\theta_1+\theta_2),
 \texttt{robot\_cmd.py}，状态机与硬件/仿真切换在 \texttt{game\_logic.py}。该结构使 Web 层与核心算法
 解耦，便于在无浏览器环境下以单元测试覆盖领域逻辑。
 
-\section{双模式对弈与人机交互}
+\section{领域纯函数与状态表示}
+\texttt{domain.py} 将棋盘表示为键为 \texttt{"col,row"} 的字典（红方棋子大写、黑方小写，\texttt{row}=0
+在黑方底线），并提供：
+\begin{itemize}[itemsep=2pt]
+  \item \texttt{board\_state\_to\_fen}：把 $10\times9$ 字典压缩为标准 FEN（含走子方与半回合）；
+  \item \texttt{apply\_uci\_to\_board\_state}：把一步 UCI 应用到字典并返回是否发生吃子；
+  \item \texttt{board\_pos\_to\_uci}：把“\texttt{col,row}”数组坐标转回 UCI（\texttt{f"{UCI\_FILES[col]}{9-row}"}）；
+  \item \texttt{color\_to\_turn\_char} / \texttt{opposite\_color} 等走子方工具。
+\end{itemize}
+这些纯函数无 I/O 副作用，是视觉、决策、执行三层共享的“词汇表”，也是测试覆盖的重点。
+
+\section{对局状态机与双模式}
 \label{sec:dual}
-系统支持\textbf{硬件}与\textbf{仿真}两种机器人模式（默认硬件）。硬件模式下，\texttt{apply\_ai\_best\_move}
-将 AI 走法转换为五值指令、预应用到棋盘状态、暂停视觉、下发至 STM32 并等待 \texttt{STATE:5,RESULT:1}；
-仿真模式则在本地模拟走子。Web 界面（\texttt{templates/index.html} + \texttt{static/js/app.js}）提供：
-实时摄像头 MJPEG 流与本地/网络摄像头切换、单步与连续棋盘识别、开局（硬件先归位）、AI 走子与
-实时评分（depth/score/pv/nodes）、手动或自动识别玩家走子，以及 FEN、棋局状态、走子历史、回合、
-机器人状态与连接探测等可视化。
+系统支持\textbf{硬件}与\textbf{仿真}两种机器人模式（Web 默认硬件）。核心流程 \texttt{apply\_ai\_best\_move}
+执行以下步骤：
+\begin{enumerate}[label=(\arabic*)]
+  \item 将 AI 走法转为五值命令并格式化，构造去重令牌 \texttt{ai\_command\_token}；
+  \item \textbf{重复走法保护}：若尾步或令牌重复，直接忽略而不重发；
+  \item 预应用：把走法写入 \texttt{move\_history}、更新 \texttt{board\_state} 与 FEN，并暂停视觉识别
+        （\texttt{vision\_pause\_until}，默认 15\,s）；
+  \item 分发：仿真模式直接返回成功回执；硬件模式经持久 TCP 客户端下发并等待 \texttt{STATE:5,RESULT:1}；
+  \item 硬件 ACK 后\textbf{立即}复位动态基线并恢复视觉识别，仿真模式则等暂停期满恢复。
+\end{enumerate}
+此外，\texttt{/api/game/start} 在硬件模式下会\textbf{先发归位指令并等待 homing ack}，失败则返回 503
+且不开局；仿真模式跳过归位。该“开局前归位”契约由前端与后端测试共同固化。
+
+\section{HTTP API 与前端交互}
+四个蓝图暴露的主要能力包括：\texttt{status}（\texttt{/api/status} 完整状态、\texttt{/api/robot/status}
+探测 STM32）、\texttt{camera}（\texttt{/api/camera/stream} 以 \texttt{multipart/x-mixed-replace}
+推送 MJPEG 实时流、\texttt{/api/capture} 单帧）、\texttt{recognition}（\texttt{/api/recognize} 静态
+识别、\texttt{/api/recognize/dynamic} 动态识别主循环、\texttt{/api/ai\_move} 后台思考并应用走法）、
+\texttt{game}（\texttt{/api/game/start}、\texttt{/api/game/reset}）。前端 \texttt{static/js/app.js}
+通过轮询 \texttt{/api/status} 与 \texttt{/api/ai\_status}、订阅 MJPEG 流，实现实时视频、评分
+（depth/score/pv/nodes）、走子历史与机器人连接状态的统一可视化。
+
+\subsection*{本章小结}
+本章说明接口层如何用 Flask 组合根 + 四个蓝图把核心算法“缝合”为人机界面：领域纯函数充当无副作用
+的共享词汇表，对局状态机实现硬件/仿真双模式与“开局前归位”“重复走法不重发”“ACK 后即时恢复视觉”
+等关键契约，MJPEG 流与轮询式状态接口则提供了低延迟的交互通道。
 
 % ============================================================
 \chapter{工程实现与质量保障}
@@ -592,16 +759,41 @@ y &= L_1\sin\theta_1 + L_2\sin(\theta_1+\theta_2),
 识别并发、五值协议与 Web 后端循环、前端归位契约、STM32 归位契约与 Web 领域函数等。最近一次运行
 结果为 $75$ 项通过、$1$ 项未通过——该失败源于运行环境的一个特定限制（某 Windows 环境变量超过
 $32\,767$ 字符导致 \texttt{mock.patch.dict} 异常），与识别/协议逻辑无关。协议与后端循环测试
-（约占全部测试方法的一半）直接断言了五值几何（实测 34/30/32\,mm）、吃子信号、归位共享客户端与
-“无自动重发”等关键不变量。
+（约占全部测试方法的一半）固化了如表~\ref{tab:invariants} 所示的关键不变量。
+
+\begin{table}[H]
+\centering
+\caption{测试固化的关键不变量（节选）}
+\label{tab:invariants}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{@{}>{\small}l X@{}}
+\toprule
+不变量 & 说明 \\
+\midrule
+协议几何 & 五值命令由 \texttt{BoardToArmConfig}（34/30/32\,mm，右上角原点）精确推导；过河用 32\,mm 纵向间距 \\
+吃子信号 & 由\textbf{移动前}目标格占用决定（\texttt{\_target\_has\_piece}） \\
+归位共享客户端 & 归位与走子复用同一持久 socket；\texttt{/api/game/start} 先归位再开局 \\
+无自动重发 & 运动指令缺失 ACK 即上报，不重试（指令非幂等） \\
+重复走法防护 & 尾步重复与重复命令令牌不重发 \\
+双模式契约 & 硬件开始必须归位成功才开局；仿真跳过归位 \\
+动态基线 & 机器臂落子后需连续 $N$ 帧匹配才锁定，ACK 后即时恢复识别 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \section{ONNX 推理与执行提供者}
 \label{sec:onnx}
-\begin{sloppypar}
-\texttt{core/\allowbreak runonnx} 的推理后端按优先级选择 \texttt{CUDAExecutionProvider} →
-\texttt{DmlExecutionProvider} → \texttt{CPUExecutionProvider}，在缺失 CUDA~12 / cuDNN~9 运行库时
-自动回退至 CPU，并启用 \texttt{ORT\_ENABLE\_ALL} 图优化，保证在无 GPU 环境下仍可运行（仅推理速度下降）\cite{onnxruntime2024}。
-\end{sloppypar}
+\texttt{core/runonnx} 的推理后端按优先级选择
+\texttt{CUDAExecutionProvider} → \texttt{DmlExecutionProvider} → \texttt{CPUExecutionProvider}
+\cite{onnxruntime2024}。在 Windows 上，后端先探测 \texttt{cublas64\_12.dll}、
+\texttt{cublasLt64\_12.dll}、\texttt{cudnn64\_9.dll}（即 CUDA 12 + cuDNN 9）是否存在，缺失则回退
+CPU；若 GPU 会话初始化失败，还会捕获异常二次回退。
+会话启用 \texttt{ORT\_ENABLE\_ALL} 图优化，并保证在无 GPU 环境下仍可运行（仅推理速度下降）。
+
+\subsection*{本章小结}
+本章以代码规模表、测试不变量表与 ONNX 执行提供者回退链说明工程实现的质量保障：系统以约 $6\,665$
+行 Python 与 $6\,448$ 行固件实现，并辅以 $76$ 个测试方法固化协议几何、吃子信号、归位契约、无自动
+重发等关键不变量，确保视觉、决策、控制三层可独立回归。
 
 % ============================================================
 \chapter{实验与系统指标}
@@ -645,46 +837,27 @@ pikafish.nnue & NNUE 评估权重 & $\approx$50.8\,MiB & — & — \\
 机器人网络 & \texttt{ROBOT\_NETWORK\_PORT}=8086, \texttt{ROBOT\_NETWORK\_HOST}=192.168.0.102 \\
 机械臂几何 & $s_f$=34\,mm, $s_r$=30\,mm, $s_{\text{river}}$=32\,mm, 原点右上角 \\
 归位 & \texttt{ROBOT\_HOMING\_M1}=-17.1848$^\circ$, \texttt{ROBOT\_HOMING\_M2}=-55.6304$^\circ$ \\
+抓取高度 & \texttt{GRIPPER\_PICK\_HEIGHT}=80, \texttt{GRASP\_HEIGHT}=10, \texttt{MOVE\_HEIGHT}=50 \\
+移动速度 & \texttt{ROBOT\_SPEED\_FAST}=100, \texttt{ROBOT\_SPEED\_SLOW}=30 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-% ============================================================
-\chapter{讨论}
-\label{ch:disc}
-
-\section{设计权衡}
-\label{sec:tradeoff}
-系统在“识别精度”与“推理开销”之间选择了整盘一次性分类而非逐格/检测器方案，换取了边缘部署下的低
-延迟与简单后处理；以四角关键点而非全棋盘角点检测做定位，则降低了对棋盘纹理完整性的依赖。在通信上，
-五值 ASCII 协议刻意保持极小表面积，把运动学复杂性下沉到 STM32，使上位机逻辑简单且易于测试
-（测试直接断言几何与 ACK）。
-
-\section{已知不一致与可复现性说明}
-\label{sec:inconsist}
-论文必须如实指出代码库中存在两处坐标/几何约定差异，供后续维护者注意：
-\begin{itemize}[itemsep=2pt]
-  \item \texttt{xq\_utils/coordinates.py} 采用 $1$--$10$ 的行列编号与 $50$~mm 方格（左上角原点），
-        服务于仿真控制器；而激活的硬件路径（\texttt{robot/protocol.py} 与 \texttt{web\_simulation/domain.py}）
-        采用 $0$--$9$ 编号与实测 34/30/32\,mm 几何（右上角原点），以匹配 Pikafish 的 UCI 变体与固件。
-        二者暂无显式适配层，属于历史演进遗留，建议在重构时统一。
-  \item 存在激活的五值 8086 传输栈与已弃用的 JSON 5000 传输栈并存，主程序仅使用前者。
-\end{itemize}
-此外，\texttt{config.py} 中仍保留若干针对早期 YOLO 方案的配置项（如 \texttt{YOLO\_MODEL\_PATH}），
-当前识别流水线已不加载该类模型，属历史残留，建议清理以免误导。
-
-\section{局限性}
-\label{sec:limit}
-本文的实验部分仅给出可在仓库核验的规格与测试覆盖，未包含真实硬件下的识别准确率、单步移子时延与
-长时间运行稳定性等经验指标——这需要实体机械臂与标定环境，留作后续工作。
+\subsection*{本章小结}
+本章仅给出可在仓库直接核验的模型规格、配置常量与代码/测试规模，刻意不引入未经真实硬件测量的
+精度或时延数据，以保证论文结论可复现。这些规格共同刻画了系统的设计特征与资源占用。
 
 % ============================================================
 \chapter{结论与展望}
 \label{ch:conc}
 本文介绍了 CH-RO 中国象棋对弈机器人系统，覆盖从视觉棋盘识别、Pikafish UCI 决策到 STM32 五值
-指令执行的完整闭环，并以 Flask Web 界面贯通人机交互。系统通过 RTMPose 四角关键点 + 全局分类器的
-轻量识别方案、确定性的五值指令与完成确认握手，以及硬件/仿真双模式，在解耦、可测试的代码架构下
+指令执行的完整闭环，并以 Flask Web 界面贯通人机交互。系统通过“RTMPose 四角关键点 + 全局分类器”
+的轻量识别方案、确定性的五值指令与完成确认握手，以及硬件/仿真双模式，在解耦、可测试的代码架构下
 实现了端到端对弈。
+
+需要如实说明两点工程现实：其一是代码库中仍并存两套传输栈（激活的五值 8086 栈与已弃用的 JSON 5000
+栈），主程序仅使用前者；其二是仿真控制器与硬件路径在坐标/几何约定上存在历史演进差异，属于应在重构
+时统一的遗留问题。论文对此予以显式标注，以避免误导后续维护者。
 
 未来工作包括：(1) 统一坐标与几何约定，消除仿真/硬件路径差异；(2) 在真实硬件上建立识别准确率与
 移子时延的基准评测；(3) 引入更轻量的分类/关键点模型以提升边缘实时性；(4) 扩展开局库、残局表与
