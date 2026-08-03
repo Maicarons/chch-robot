@@ -1,6 +1,11 @@
 """
-机械臂TCP通信客户端 - Windows主机端
-通过TCP向STM32机械臂发送走棋指令
+机械臂TCP通信客户端 - Windows主机端（遗留实现）
+
+.. deprecated::
+    本模块是早期基于 JSON 报文的机械臂传输实现，**已不再被主程序使用**。
+    当前激活的传输层是 :mod:`robot.protocol` 中的
+    :class:`~robot.protocol.RobotPersistentClient`（五值指令协议）。
+    本文件仅作为历史参考保留，未通过 :mod:`robot` 包导出，请勿在新代码中导入。
 """
 
 import socket

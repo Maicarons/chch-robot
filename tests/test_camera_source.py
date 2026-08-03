@@ -86,7 +86,7 @@ class CameraSourceTests(unittest.TestCase):
         fake_opener = MagicMock()
         fake_opener.open.side_effect = fake_urlopen
 
-        with patch("vision.camera.urllib.request.build_opener", return_value=fake_opener):
+        with patch("vision.http_capture.urllib.request.build_opener", return_value=fake_opener):
             capture = HttpSnapshotCapture("http://192.168.1.23:8080/stream.mjpg")
             ok, frame = capture.read()
 
@@ -102,8 +102,8 @@ class CameraSourceTests(unittest.TestCase):
         fake_opener = MagicMock()
         fake_opener.open.return_value = FakeHttpResponse(jpeg_bytes)
 
-        with patch("vision.camera.urllib.request.urlopen") as urlopen, \
-             patch("vision.camera.urllib.request.build_opener", return_value=fake_opener) as build_opener:
+        with patch("vision.http_capture.urllib.request.urlopen") as urlopen, \
+             patch("vision.http_capture.urllib.request.build_opener", return_value=fake_opener) as build_opener:
             urlopen.side_effect = AssertionError("global urlopen would use proxy settings")
             capture = HttpSnapshotCapture("http://192.168.1.23:8080/stream.mjpg")
             ok, frame = capture.read()
@@ -129,7 +129,7 @@ class CameraSourceTests(unittest.TestCase):
         fake_opener = MagicMock()
         fake_opener.open.side_effect = fake_urlopen
 
-        with patch("vision.camera.urllib.request.build_opener", return_value=fake_opener):
+        with patch("vision.http_capture.urllib.request.build_opener", return_value=fake_opener):
             capture = HttpSnapshotCapture("http://192.168.1.23:8080/stream.mjpg")
             ok, frame = capture.read()
 

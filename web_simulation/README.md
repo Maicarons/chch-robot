@@ -45,11 +45,20 @@ python app.py
 
 ### 后端 (Flask)
 
-- `app.py` - Flask应用，提供REST API
-- 调用项目核心模块：
-  - `from vision import BoardRecognizer`
-  - `from ai import AIEngine`
-  - `from robot import RobotController`
+`web_simulation/` 是一个按职责拆分的 Flask 包（组合根 + 辅助模块 + 路由蓝图）：
+
+- `app.py` - 组合根：持有共享的 `game_state` 与模块级全局对象，注册下列蓝图
+- `domain.py` - 纯函数（棋盘/FEN/回合计算，含 `board_state_to_fen()`）
+- `services.py` - 摄像头与机械臂 TCP 客户端工厂
+- `robot_cmd.py` - 五值指令封装与发送
+- `game_logic.py` - 有状态的走子/动态基线同步
+- `startup.py` - 命令行参数覆盖
+- `routes/status.py` - 状态与控制器探测
+- `routes/camera.py` - 摄像头与 MJPEG 视频流
+- `routes/recognition.py` - 棋盘识别 / AI 走法 / 动态跟踪
+- `routes/game.py` - 开局与重置
+
+应用启动后调用项目核心模块：`vision.BoardRecognizer`、`ai.AIEngine`、`robot.RobotController`。
 
 ### 前端
 
@@ -71,7 +80,7 @@ python app.py
 
 残局识别后，系统会：
 1. 将识别的`board_state`转换为标准FEN格式
-2. 使用`board_state_to_fen()`函数生成FEN
+2. 使用 `web_simulation.domain.board_state_to_fen()` 生成FEN
 3. 将FEN传递给AI引擎作为初始局面
 
 ## 注意事项

@@ -96,3 +96,6 @@ debug_board_*.jpg
 cmake-build-*/
 out/
 target/
+
+# WorkBuddy local tooling / project memory (not part of the shipped project)
+.workbuddy/

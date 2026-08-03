@@ -4,12 +4,20 @@
 
 This repository implements a Xiangqi robot system with Python services, web UI, AI integration, vision models, and STM32 firmware.
 
-- `main.py`, `game_manager.py`, `config.py`, and `utils.py` are the top-level CLI, orchestration, configuration, and shared utilities.
+- `main.py` (CLI entry), `game_manager/` (orchestration), `config.py` (configuration), and `xq_utils/` (shared Xiangqi utilities: FEN, coordinates, notation, board helpers) are the top-level modules.
 - `vision/` contains camera capture, board detection, mapping, stabilization, and recognition code.
 - `ai/` wraps the Pikafish UCI engine. Keep platform-specific engine paths configurable in `config.py`.
-- `robot/` contains robot-arm command conversion, TCP protocol code, and controller abstractions.
+- `robot/` contains robot-arm command conversion, TCP protocol code, and controller abstractions. The active transport is `protocol.py` (`RobotPersistentClient`, five-value command protocol); `legacy_tcp_client.py` is a deprecated JSON transport kept only for reference and is not exported from the package.
 - `core/` contains lower-level ONNX inference helpers; `model/` stores ONNX assets.
-- `web_simulation/` contains the Flask app, templates, CSS, and JavaScript.
+- `web_simulation/` is the Flask app (port 5000), decomposed into a composition root plus helper modules and route Blueprints:
+  - `app.py` — composition root: owns the shared `game_state` dict and module-level globals, registers the Blueprints.
+  - `domain.py` — pure board/FEN/turn helpers (single source of truth for web board math).
+  - `services.py` — camera and robot-TCP client factories.
+  - `robot_cmd.py` — five-value command layer (build/send robot commands).
+  - `game_logic.py` — stateful game transitions (AI move application, dynamic baseline sync).
+  - `startup.py` — CLI parameter overrides.
+  - `routes/` — Blueprints split by responsibility: `status.py`, `camera.py`, `recognition.py`, `game.py`.
+  - `templates/`, `static/` — HTML/CSS/JS frontend.
 - `tests/` contains pytest/unittest tests and sample images; `camera_debug/` stores captured debug frames.
 - `firmware/stm32-tcp-server/`, `firmware/stm32-f103-angle-plan/`, and `firmware/stm32-f103-keil-robot/` contain embedded C firmware and Keil artifacts.
 
