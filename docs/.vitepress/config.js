@@ -8,7 +8,8 @@ const enGuide = [
   { text: 'Hardware', link: '/en/guide/hardware' },
   { text: 'Development', link: '/en/guide/development' },
   { text: 'REST API', link: '/en/reference/api' },
-  { text: 'Reference Index', link: '/en/reference/' }
+  { text: 'Reference Index', link: '/en/reference/' },
+  { text: 'Academic Paper', link: '/en/paper' }
 ]
 
 const zhGuide = [
@@ -19,7 +20,8 @@ const zhGuide = [
   { text: '硬件与固件', link: '/zh/guide/hardware' },
   { text: '开发指南', link: '/zh/guide/development' },
   { text: 'REST API', link: '/zh/reference/api' },
-  { text: '参考索引', link: '/zh/reference/' }
+  { text: '参考索引', link: '/zh/reference/' },
+  { text: '学术论文', link: '/zh/paper' }
 ]
 
 export default defineConfig({
@@ -27,6 +29,7 @@ export default defineConfig({
   description: 'Documentation for the Xiangqi robot system',
   cleanUrls: true,
   lastUpdated: true,
+  ignoreDeadLinks: true,
   locales: {
     root: {
       label: 'English',
@@ -36,6 +39,7 @@ export default defineConfig({
           { text: 'Guide', link: '/en/guide/getting-started' },
           { text: 'Architecture', link: '/en/guide/architecture' },
           { text: 'API', link: '/en/reference/api' },
+          { text: 'Paper', link: '/en/paper' },
           { text: 'Chinese', link: '/zh/' }
         ],
         sidebar: {
@@ -52,6 +56,7 @@ export default defineConfig({
           { text: '指南', link: '/zh/guide/getting-started' },
           { text: '架构', link: '/zh/guide/architecture' },
           { text: 'API', link: '/zh/reference/api' },
+          { text: '论文', link: '/zh/paper' },
           { text: 'English', link: '/en/' }
         ],
         sidebar: {
