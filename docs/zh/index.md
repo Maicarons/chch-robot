@@ -1,22 +1,26 @@
-# CH-RO 机器人文档
-
-CH-RO 是一个中国象棋人机对弈机器人系统，集成 ONNX 棋盘识别、Pikafish UCI 引擎、STM32 TCP 机械臂控制和 Flask Web 管理界面。
-
-本文档用于安装依赖、配置摄像头和下位机、运行 Web 界面，并理解项目结构。
-
-## 核心能力
-
-- USB 摄像头或网络摄像头采集。
-- RTMPose 与分类器 ONNX 推理。
-- 多帧稳定和动态走子识别。
-- Pikafish 中国象棋 AI 走法生成。
-- 软件仿真和真实硬件两种机器人模式。
-- STM32 五值指令协议和 homing 握手。
-
-## 推荐入口
-
-- 本地启动：[快速开始](./guide/getting-started.md)
-- 模块划分：[系统架构](./guide/architecture.md)
-- 运行参数：[配置](./guide/configuration.md)
-- 参与开发：[开发](./guide/development.md)
-- 旧文档索引：[参考索引](./reference/index.md)
+---
+layout: home
+hero:
+  name: CH-RO Robot
+  text: 中国象棋人机对弈机器人文档
+  tagline: 视觉棋盘识别、Pikafish 决策引擎、STM32 运动控制与 Flask 操作台。
+  image:
+    src: /hero.svg
+    alt: CH-RO Robot Team
+  actions:
+    - theme: brand
+      text: 中文指南
+      link: /zh/guide/getting-started
+    - theme: alt
+      text: English
+      link: /en/
+features:
+  - title: 视觉棋盘识别
+    details: RTMPose 四角关键点 + 透视校正；单一全局分类器一次性输出整盘 90 个交叉点；多帧稳定与基于规则的动态走子推断。
+  - title: Pikafish 决策引擎
+    details: UCI_Variant=xaingqi 走法生成，扩展 FEN 表示棋局，可驱动硬件与仿真两种对弈模式。
+  - title: STM32 运动控制
+    details: 五值 ASCII 指令协议（TCP 8086），下位机完成运动学解算，并以 STATE/RESULT 握手与 homing 协同。
+  - title: Flask 操作台
+    details: 实时视频流、单步/连续识别，以及硬件/仿真双模式的人机对弈 Web 界面。
+---

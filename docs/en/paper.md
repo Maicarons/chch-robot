@@ -12,7 +12,7 @@ protocol sequence, board geometry), multiple data tables, and a real captured bo
 
 ## Downloads
 
-- [Paper PDF (XeLaTeX, 27 pages)](/paper/chch-robot-paper.pdf)
+- [Paper PDF (XeLaTeX, 31 pages)](/paper/chch-robot-paper.pdf)
 - [LaTeX source](/paper/chch-robot-paper.tex)
 - [Bibliography (.bib)](/paper/chch-robot-paper.bib)
 
@@ -25,5 +25,5 @@ protocol sequence, board geometry), multiple data tables, and a real captured bo
 
 ## Notes
 
-- The `author` field is a placeholder; replace with real authors and affiliations before publication.
+- Author: CH-RO Robot Team.
 - The experiments section reports only repository-verifiable specifications and test coverage. Empirical accuracy/latency on real hardware is left as future work and is not fabricated.

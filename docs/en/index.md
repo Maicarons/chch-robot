@@ -1,21 +1,26 @@
-# CH-RO Robot Documentation
-
-CH-RO is a Xiangqi human-machine robot system. It combines ONNX-based board recognition, the Pikafish UCI engine, STM32 robot-arm control over TCP, and a Flask web control panel.
-
-Use this documentation to install dependencies, configure cameras and robot targets, run the web UI, and understand the project layout.
-
-## Main Capabilities
-
-- USB or network camera capture.
-- RTMPose and classifier ONNX inference.
-- Board stabilization and dynamic move detection.
-- Pikafish engine integration for Xiangqi AI moves.
-- Simulation and hardware robot modes.
-- STM32 five-value command protocol and homing handshake.
-
-## Recommended Entry Points
-
-- Start locally: [Getting Started](./guide/getting-started.md)
-- Understand modules: [Architecture](./guide/architecture.md)
-- Tune runtime values: [Configuration](./guide/configuration.md)
-- Work on code: [Development](./guide/development.md)
+---
+layout: home
+hero:
+  name: CH-RO Robot
+  text: Xiangqi robot documentation
+  tagline: Vision recognition, Pikafish AI, STM32 motion control, and a Flask control console.
+  image:
+    src: /hero.svg
+    alt: CH-RO Robot Team
+  actions:
+    - theme: brand
+      text: English
+      link: /en/
+    - theme: alt
+      text: 中文
+      link: /zh/
+features:
+  - title: Vision board recognition
+    details: RTMPose corner keypoints with perspective correction; one global classifier outputs all 90 intersections at once. Multi-frame stabilization and rule-based dynamic move inference.
+  - title: Pikafish AI engine
+    details: UCI_Variant=xaingqi move generation over an extended FEN board representation, driving both hardware and simulation play.
+  - title: STM32 motion control
+    details: Five-value ASCII command protocol over TCP 8086, on-MCU kinematics, and a STATE/RESULT handshake with homing.
+  - title: Flask web console
+    details: Live camera stream, single/continuous recognition, and a hardware/simulation dual-mode play UI.
+---
