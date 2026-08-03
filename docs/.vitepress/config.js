@@ -27,6 +27,7 @@ const zhGuide = [
 export default defineConfig({
   title: 'CH-RO Robot',
   description: 'Documentation for the Xiangqi robot system',
+  base: '/chch-robot/',
   cleanUrls: true,
   lastUpdated: true,
   ignoreDeadLinks: true,
