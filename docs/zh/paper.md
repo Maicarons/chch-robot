@@ -11,7 +11,7 @@ XeLaTeX + ctex 排版，参考文献采用 GB/T 7714-2015 格式，包含系统�
 
 ## 下载
 
-- [论文 PDF（XeLaTeX 编译，27 页）](/paper/chch-robot-paper.pdf)
+- [论文 PDF（XeLaTeX 编译，31 页）](/paper/chch-robot-paper.pdf)
 - [LaTeX 源文件](/paper/chch-robot-paper.tex)
 - [参考文献库（.bib）](/paper/chch-robot-paper.bib)
 
@@ -24,5 +24,5 @@ XeLaTeX + ctex 排版，参考文献采用 GB/T 7714-2015 格式，包含系统�
 
 ## 说明
 
-- 论文 `author` 字段为占位符，请定稿时替换为真实作者与单位。
+- 作者：CH-RO Robot Team。
 - 实验一节仅给出可在仓库直接核验的规格与测试覆盖指标；真实硬件下的识别准确率、移子时延等经验数据列为后续工作，未做编造。
