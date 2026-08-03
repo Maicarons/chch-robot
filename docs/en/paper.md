@@ -12,7 +12,7 @@ protocol sequence, board geometry), multiple data tables, and a real captured bo
 
 ## Downloads
 
-- [Paper PDF (XeLaTeX, 15 pages)](/paper/chch-robot-paper.pdf)
+- [Paper PDF (XeLaTeX, 27 pages)](/paper/chch-robot-paper.pdf)
 - [LaTeX source](/paper/chch-robot-paper.tex)
 - [Bibliography (.bib)](/paper/chch-robot-paper.bib)
 

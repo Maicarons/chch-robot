@@ -11,7 +11,7 @@ XeLaTeX + ctex 排版，参考文献采用 GB/T 7714-2015 格式，包含系统�
 
 ## 下载
 
-- [论文 PDF（XeLaTeX 编译，15 页）](/paper/chch-robot-paper.pdf)
+- [论文 PDF（XeLaTeX 编译，27 页）](/paper/chch-robot-paper.pdf)
 - [LaTeX 源文件](/paper/chch-robot-paper.tex)
 - [参考文献库（.bib）](/paper/chch-robot-paper.bib)
 
